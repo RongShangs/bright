@@ -40,7 +40,7 @@
 
 ## 📦 下载
 
-[下载 APK](https://github.com/RongShangs/bright/releases)（推荐签名后安装）
+[下载 APK](https://github.com/RongShangs/bright/releases/download/v1.0/app-release.apk)（推荐签名后安装）
 
 ## 📝 许可
 
