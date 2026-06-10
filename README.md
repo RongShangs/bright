@@ -8,6 +8,7 @@
 - **一键亮度锁定** — 将背屏亮度写入 `/sys/class/backlight/` 并 `chmod 444` 锁定
 - **一键恢复系统控制** — `chmod 644` 恢复权限，系统重新接管
 - **状态智能识别** — 通过文件权限位判断当前状态，避免误操作
+- **控制中心磁贴**（v1.1） — 下拉通知栏一键切换，无需打开 App
 
 ## 📋 适用环境
 
@@ -40,7 +41,10 @@
 
 ## 📦 下载
 
-[下载 APK](https://github.com/RongShangs/bright/releases/download/v1.0/app-release.apk)（推荐签名后安装）
+| v1.1 | [app-release-v1.1.apk](https://github.com/RongShangs/bright/releases/download/v1.1/app-release-v1.1.apk) | 新增控制中心磁贴 |
+| v1.0 | [app-release.apk](https://github.com/RongShangs/bright/releases/download/v1.0/app-release.apk) | 首个发布版本 |
+
+推荐签名后安装
 
 ## 📝 许可
 
