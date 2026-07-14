@@ -147,13 +147,13 @@ footer .warn { font-size:.75rem; margin-top:16px; line-height:1.7; max-width:500
 <section class="hero">
   <div class="icon-wrap"><img src="icon.svg" alt="背屏激发图标"></div>
   <h1>背屏激发</h1>
-  <p class="sub">小米17 Pro / 17 Pro Max 背屏亮度一键控制</p>
-  <p class="slogan">" Root 在手，一键锁定 —— 背屏永远最亮。 "</p>
+  <p class="sub">小米17 Pro / 17 Pro Max 背屏亮度控制工具</p>
+  <p class="slogan">" 滑块一拖，亮度随心。 "</p>
   <div class="btns">
     <a href="app-release-new.apk" download class="btn btn-primary">⚡ 下载 APK</a>
     <a href="#features" class="btn btn-outline">了解更多</a>
   </div>
-  <p class="tags">小米17 Pro / 17 Pro Max · HyperOS 3.0.313.0 已测试 · 需要 Root · 控制中心磁贴</p>
+  <p class="tags">小米17 Pro / 17 Pro Max · HyperOS 3.0.313.0 已测试 · 需要 Root · 垂直滑块调节</p>
   <a href="http://rongshangs.top" target="_blank" class="blog-hero">
     <span class="blog-icon">📝</span>
     <span class="blog-body">
@@ -175,55 +175,60 @@ footer .warn { font-size:.75rem; margin-top:16px; line-height:1.7; max-width:500
 <!-- Intro -->
 <section class="intro white fade">
   <p>小米17 Pro / 17 Pro Max 的背屏很有用——<br>但系统的自动亮度，<span class="hl">总是差点意思</span>。</p>
-  <p>背屏激发是一个极简工具：<br>打开它，<span class="hl">点一下</span>，背屏亮度锁到最大。<br>再点一下，恢复系统控制。</p>
-  <p style="margin-top:14px;color:var(--sub);font-size:.95rem;">v1.2 全新界面，新增 <span class="hl">亮度滑块</span> 可实时调节亮度。<br>控制中心磁贴，下拉通知栏即可切换。<br>已在 HyperOS 3.0.313.0 上测试通过。<br>没广告。没权限请求。没后台服务。<br>Root 权限，开屏即用，用完即走。</p>
+  <p>背屏激发是一个极简工具：<br>打开它，<span class="hl">拖动滑块</span>，背屏亮度随心调节。<br>一键锁定或恢复系统控制。</p>
+  <p style="margin-top:14px;color:var(--sub);font-size:.95rem;">v1.2 全新界面，<span class="hl">垂直亮度滑块</span>直观调节。<br>支持精确输入亮度值（0-4095）。<br>控制中心磁贴，下拉通知栏即可切换。<br>已在 HyperOS 3.0.313.0 上测试通过。<br>没广告。没权限请求。没后台服务。<br>Root 权限，开屏即用，用完即走。</p>
 </section>
 
 <!-- Features -->
 <section id="features" class="white fade">
-  <h2>⚡ 核心功能</h2>
+  <h2>✨ 核心功能</h2>
   <div class="grid2">
+    <div class="card">
+      <div class="icon">🎚️</div>
+      <h3>垂直亮度滑块</h3>
+      <p>直观的滑块控件，拖动即可实时调节背屏亮度。支持 0-4095 全范围调节，所见即所得。</p>
+    </div>
+    <div class="card">
+      <div class="icon">🔢</div>
+      <h3>自定义亮度值</h3>
+      <p>支持精确输入亮度数值，满足专业需求。输入框直接设置，精度更高。</p>
+    </div>
+    <div class="card">
+      <div class="icon">⚡</div>
+      <h3>一键切换状态</h3>
+      <p>软件接管/系统控制，点击按钮即可切换。毫秒级响应，无需重启。</p>
+    </div>
+    <div class="card">
+      <div class="icon">📊</div>
+      <h3>实时状态显示</h3>
+      <p>当前亮度值、Root状态、设备型号一目了然。状态智能识别，避免误操作。</p>
+    </div>
+    <div class="card">
+      <div class="icon">🧲</div>
+      <h3>控制中心磁贴</h3>
+      <p>下拉通知栏，点击磁贴即可快速切换背屏亮度。无需打开 App，在任何界面都能操作。</p>
+    </div>
     <div class="card">
       <div class="icon">🛡️</div>
       <h3>自动 Root 检测</h3>
       <p>启动时自动验证 Root 权限。如果设备未 Root，立即提示并退出——不会留下任何残留。</p>
-    </div>
-    <div class="card">
-      <div class="icon">🔒</div>
-      <h3>一键亮度锁定</h3>
-      <p>将背屏亮度直接写入系统底层 <code>/sys/class/backlight/</code>，锁定为最大亮度。系统自动调节从此失效——背屏由你说了算。</p>
-    </div>
-    <div class="card">
-      <div class="icon">🔄</div>
-      <h3>一键恢复系统控制</h3>
-      <p>再次点击即恢复权限，系统重新接管背屏亮度。切换过程毫秒级完成，不需要重启。</p>
-    </div>
-    <div class="card">
-      <div class="icon">📊</div>
-      <h3>状态智能识别</h3>
-      <p>通过检测系统文件的读写权限，精确判断当前是「已锁定」还是「系统控制」。不怕误操作，状态一目了然。</p>
-    </div>
-    <div class="card">
-      <div class="icon">🧲</div>
-      <h3>控制中心磁贴 <span style="font-size:.7rem;background:var(--yellow);color:#1a1a2e;padding:1px 6px;border-radius:4px;">NEW</span></h3>
-      <p>下拉通知栏，点击磁贴即可一键切换背屏亮度。无需打开 App，在任何界面都能操作。</p>
     </div>
   </div>
 </section>
 
 <!-- How it works -->
 <section class="light fade">
-  <h2>🔧 原理</h2>
+  <h2>🔧 工作原理</h2>
   <div class="grid2">
     <div class="card">
       <div class="icon">📁</div>
       <h3>底层文件操作</h3>
-      <p>直接读写 <code>/sys/class/backlight/panel1-backlight/brightness</code>，将亮度值写入内核接口。</p>
+      <p>直接读写 <code>/sys/class/backlight/panel1-backlight/brightness</code>，将亮度值写入内核接口。支持 0-4095 全范围调节。</p>
     </div>
     <div class="card">
       <div class="icon">🔐</div>
       <h3>权限控制</h3>
-      <p>锁定：<code>chmod 444</code> 设为只读，系统无法修改。<br>恢复：<code>chmod 644</code> 恢复可写，系统重新接管。</p>
+      <p>软件接管：滑块或输入框设置亮度 → 写入 brightness 文件。<br>锁定：<code>chmod 444</code> 只读，系统无法修改。<br>恢复：<code>chmod 644</code> 恢复可写，系统重新接管。</p>
     </div>
   </div>
   <div class="req-box">
@@ -245,7 +250,11 @@ footer .warn { font-size:.75rem; margin-top:16px; line-height:1.7; max-width:500
   </div>
   <div class="step">
     <div class="num">3</div>
-    <div class="body"><h3>点击激发</h3><p>看到 Toast 提示「已激发背屏亮度」即完成——背屏锁死在最大亮度。再次点击恢复系统控制。</p></div>
+    <div class="body"><h3>调节亮度</h3><p>拖动垂直滑块实时调节背屏亮度，或在输入框中输入精确亮度值（0-4095）。</p></div>
+  </div>
+  <div class="step">
+    <div class="num">4</div>
+    <div class="body"><h3>切换状态</h3><p>点击「还原系统控制」恢复系统自动调节，或保持软件接管状态锁定当前亮度。</p></div>
   </div>
 </section>
 
@@ -254,8 +263,9 @@ footer .warn { font-size:.75rem; margin-top:16px; line-height:1.7; max-width:500
   <h2>❓ 常见问题</h2>
   <div class="faq-item"><div class="q">为什么需要 Root？</div><div class="a">背屏亮度由内核驱动控制，路径 <code>/sys/class/backlight/</code> 需要 Root 权限才能修改文件权限和写入亮度值。没有 Root 无法绕过 Android 的权限隔离。</div></div>
   <div class="faq-item"><div class="q">支持哪些机型？</div><div class="a">已适配 <b>小米17 Pro</b> 和 <b>小米17 Pro Max</b>，在 HyperOS 3.0.313.0 上测试通过。其他双屏机型如果背光路径同为 <code>panel1-backlight</code>，理论上也能用，但未经过测试。</div></div>
-  <div class="faq-item"><div class="q">锁定后耗电会增加吗？</div><div class="a">背屏锁死在最大亮度会比系统自动调节更耗电，但背屏本身功耗不大，实际影响有限。</div></div>
-  <div class="faq-item"><div class="q">会损坏硬件吗？</div><div class="a">不会。只是把亮度和权限设为固定值，没有超频或超压。恢复系统控制后一切还原。但 OLED 屏幕长时间高亮度静态显示可能导致烧屏，建议不要长期锁定。</div></div>
+  <div class="faq-item"><div class="q">亮度范围是多少？</div><div class="a">支持 0-4095 全范围调节，可以通过滑块直观调节，也可以在输入框中输入精确数值。</div></div>
+  <div class="faq-item"><div class="q">锁定后耗电会增加吗？</div><div class="a">高亮度会比系统自动调节更耗电，但背屏本身功耗不大，实际影响有限。可以根据需要调节到合适的亮度值。</div></div>
+  <div class="faq-item"><div class="q">会损坏硬件吗？</div><div class="a">不会。只是把亮度和权限设为固定值，没有超频或超压。恢复系统控制后一切还原。但 OLED 屏幕长时间高亮度静态显示可能导致烧屏，建议适当调节亮度。</div></div>
   <div class="faq-item"><div class="q">需要联网吗？</div><div class="a">不需要。应用完全不联网（仅声明权限以防未来需要），所有操作都在本地完成。</div></div>
   <div class="faq-item"><div class="q">APK 多大？</div><div class="a">约 600KB。极简设计，不含大体积的资源文件和第三方库。</div></div>
 </section>
@@ -266,13 +276,14 @@ footer .warn { font-size:.75rem; margin-top:16px; line-height:1.7; max-width:500
   <p style="color:var(--sub);margin-bottom:16px;">当前版本 v1.2 · 小米17 Pro / 17 Pro Max · HyperOS 3.0.313.0 已测试 · 需要 Root</p>
   <a href="app-release-new.apk" download class="btn btn-primary" style="margin-top:16px;">⚡ 下载 APK</a>
   <p style="margin-top:14px;color:var(--sub);font-size:.85rem;">安装前请确认设备已获取 Root 权限（Magisk / KernelSU）</p>
+  <p style="margin-top:8px;color:var(--sub);font-size:.8rem;">v1.2 新增垂直亮度滑块、自定义亮度值、全新卡片式界面</p>
 </section>
 
 <!-- Open Source -->
 <section class="dark fade" style="text-align:center;">
   <h2>📂 源代码</h2>
   <p style="margin-bottom:12px;">本项目完全开源，欢迎查阅、修改、提交 PR。</p>
-  <a href="https://github.com/RongShangs" target="_blank" class="btn btn-outline" style="margin-top:8px;">GitHub 主页</a>
+  <a href="https://github.com/RongShangs/bright" target="_blank" class="btn btn-outline" style="margin-top:8px;">GitHub 项目</a>
   <p style="margin-top:16px;color:#888;font-size:.8rem;">MIT 协议 · 关注获取更多开源项目</p>
 </section>
 
