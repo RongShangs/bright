@@ -176,7 +176,7 @@ footer .warn { font-size:.75rem; margin-top:16px; line-height:1.7; max-width:500
 <section class="intro white fade">
   <p>小米17 Pro / 17 Pro Max 的背屏很有用——<br>但系统的自动亮度，<span class="hl">总是差点意思</span>。</p>
   <p>背屏激发是一个极简工具：<br>打开它，<span class="hl">拖动滑块</span>，背屏亮度随心调节。<br>一键锁定或恢复系统控制。</p>
-  <p style="margin-top:14px;color:var(--sub);font-size:.95rem;">v1.2 全新界面，<span class="hl">垂直亮度滑块</span>直观调节。<br>支持精确输入亮度值（0-4095）。<br>控制中心磁贴，下拉通知栏即可切换。<br>已在 HyperOS 3.0.313.0 上测试通过。<br>没广告。没权限请求。没后台服务。<br>Root 权限，开屏即用，用完即走。</p>
+  <p style="margin-top:14px;color:var(--sub);font-size:.95rem;">v1.2 全新界面，<span class="hl">垂直亮度滑块</span>直观调节。<br>控制中心磁贴，下拉通知栏即可切换。<br>已在 HyperOS 3.0.313.0 上测试通过。<br>没广告。没权限请求。没后台服务。<br>Root 权限，开屏即用，用完即走。</p>
 </section>
 
 <!-- Features -->
@@ -186,12 +186,7 @@ footer .warn { font-size:.75rem; margin-top:16px; line-height:1.7; max-width:500
     <div class="card">
       <div class="icon">🎚️</div>
       <h3>垂直亮度滑块</h3>
-      <p>直观的滑块控件，拖动即可实时调节背屏亮度。支持 0-4095 全范围调节，所见即所得。</p>
-    </div>
-    <div class="card">
-      <div class="icon">🔢</div>
-      <h3>自定义亮度值</h3>
-      <p>支持精确输入亮度数值，满足专业需求。输入框直接设置，精度更高。</p>
+      <p>直观的滑块控件，拖动即可实时调节背屏亮度。所见即所得，调节更直观。</p>
     </div>
     <div class="card">
       <div class="icon">⚡</div>
@@ -223,12 +218,12 @@ footer .warn { font-size:.75rem; margin-top:16px; line-height:1.7; max-width:500
     <div class="card">
       <div class="icon">📁</div>
       <h3>底层文件操作</h3>
-      <p>直接读写 <code>/sys/class/backlight/panel1-backlight/brightness</code>，将亮度值写入内核接口。支持 0-4095 全范围调节。</p>
+      <p>直接读写 <code>/sys/class/backlight/panel1-backlight/brightness</code>，将亮度值写入内核接口。</p>
     </div>
     <div class="card">
       <div class="icon">🔐</div>
       <h3>权限控制</h3>
-      <p>软件接管：滑块或输入框设置亮度 → 写入 brightness 文件。<br>锁定：<code>chmod 444</code> 只读，系统无法修改。<br>恢复：<code>chmod 644</code> 恢复可写，系统重新接管。</p>
+      <p>软件接管：滑块调节亮度 → 写入 brightness 文件。<br>锁定：<code>chmod 444</code> 只读，系统无法修改。<br>恢复：<code>chmod 644</code> 恢复可写，系统重新接管。</p>
     </div>
   </div>
   <div class="req-box">
@@ -250,7 +245,7 @@ footer .warn { font-size:.75rem; margin-top:16px; line-height:1.7; max-width:500
   </div>
   <div class="step">
     <div class="num">3</div>
-    <div class="body"><h3>调节亮度</h3><p>拖动垂直滑块实时调节背屏亮度，或在输入框中输入精确亮度值（0-4095）。</p></div>
+    <div class="body"><h3>调节亮度</h3><p>拖动垂直滑块实时调节背屏亮度，找到合适的亮度值。</p></div>
   </div>
   <div class="step">
     <div class="num">4</div>
@@ -263,7 +258,7 @@ footer .warn { font-size:.75rem; margin-top:16px; line-height:1.7; max-width:500
   <h2>❓ 常见问题</h2>
   <div class="faq-item"><div class="q">为什么需要 Root？</div><div class="a">背屏亮度由内核驱动控制，路径 <code>/sys/class/backlight/</code> 需要 Root 权限才能修改文件权限和写入亮度值。没有 Root 无法绕过 Android 的权限隔离。</div></div>
   <div class="faq-item"><div class="q">支持哪些机型？</div><div class="a">已适配 <b>小米17 Pro</b> 和 <b>小米17 Pro Max</b>，在 HyperOS 3.0.313.0 上测试通过。其他双屏机型如果背光路径同为 <code>panel1-backlight</code>，理论上也能用，但未经过测试。</div></div>
-  <div class="faq-item"><div class="q">亮度范围是多少？</div><div class="a">支持 0-4095 全范围调节，可以通过滑块直观调节，也可以在输入框中输入精确数值。</div></div>
+  <div class="faq-item"><div class="q">如何调节亮度？</div><div class="a">拖动界面上的垂直滑块即可实时调节背屏亮度，找到合适的亮度值后松手即可。</div></div>
   <div class="faq-item"><div class="q">锁定后耗电会增加吗？</div><div class="a">高亮度会比系统自动调节更耗电，但背屏本身功耗不大，实际影响有限。可以根据需要调节到合适的亮度值。</div></div>
   <div class="faq-item"><div class="q">会损坏硬件吗？</div><div class="a">不会。只是把亮度和权限设为固定值，没有超频或超压。恢复系统控制后一切还原。但 OLED 屏幕长时间高亮度静态显示可能导致烧屏，建议适当调节亮度。</div></div>
   <div class="faq-item"><div class="q">需要联网吗？</div><div class="a">不需要。应用完全不联网（仅声明权限以防未来需要），所有操作都在本地完成。</div></div>
@@ -276,7 +271,7 @@ footer .warn { font-size:.75rem; margin-top:16px; line-height:1.7; max-width:500
   <p style="color:var(--sub);margin-bottom:16px;">当前版本 v1.2 · 小米17 Pro / 17 Pro Max · HyperOS 3.0.313.0 已测试 · 需要 Root</p>
   <a href="app-release-new.apk" download class="btn btn-primary" style="margin-top:16px;">⚡ 下载 APK</a>
   <p style="margin-top:14px;color:var(--sub);font-size:.85rem;">安装前请确认设备已获取 Root 权限（Magisk / KernelSU）</p>
-  <p style="margin-top:8px;color:var(--sub);font-size:.8rem;">v1.2 新增垂直亮度滑块、自定义亮度值、全新卡片式界面</p>
+  <p style="margin-top:8px;color:var(--sub);font-size:.8rem;">v1.2 新增垂直亮度滑块、全新卡片式界面</p>
 </section>
 
 <!-- Open Source -->
