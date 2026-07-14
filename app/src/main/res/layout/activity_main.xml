@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="24dp"
+    android:gravity="center_horizontal">
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="背屏激发"
+        android:textSize="28sp"
+        android:textStyle="bold"
+        android:textColor="#333333"
+        android:layout_marginTop="32dp"/>
+
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:background="#EEEEEE"
+        android:layout_marginVertical="24dp"/>
+
+    <TextView
+        android:id="@+id/statusText"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="当前状态：检测中..."
+        android:textSize="18sp"
+        android:textColor="#666666"/>
+
+    <Button
+        android:id="@+id/toggleBtn"
+        android:layout_width="match_parent"
+        android:layout_height="64dp"
+        android:layout_marginTop="24dp"
+        android:text="切换状态"
+        android:backgroundTint="#FBC02D"
+        android:textColor="#FFFFFF"
+        android:textSize="18sp"
+        android:textStyle="bold"/>
+
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:background="#EEEEEE"
+        android:layout_marginVertical="32dp"/>
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="自定义激发亮度"
+        android:textSize="14sp"
+        android:textColor="#999999"/>
+
+    <EditText
+        android:id="@+id/brightnessInput"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="输入亮度值 (例如: 4095)"
+        android:inputType="number"
+        android:textAlignment="center"
+        android:layout_marginTop="8dp"/>
+
+    <TextView
+        android:id="@+id/maxHint"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="系统最高亮度: 加载中..."
+        android:textSize="12sp"
+        android:textColor="#BBBBBB"
+        android:layout_marginTop="4dp"/>
+
+    <Button
+        android:id="@+id/saveBtn"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="16dp"
+        android:text="保存设置"
+        style="@style/Widget.AppCompat.Button.Borderless.Colored"/>
+
+</LinearLayout>

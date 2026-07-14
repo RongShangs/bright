@@ -1,0 +1,10 @@
+<svg width="108" height="108" viewBox="0 0 108 108" xmlns="http://www.w3.org/2000/svg">
+    <!-- 白色底色 -->
+    <rect width="108" height="108" fill="#FFFFFF"/>
+    
+    <!-- 浅灰色圆角屏幕边框 -->
+    <rect x="26" y="30" width="56" height="48" rx="8" fill="#E0E0E0"/>
+    
+    <!-- 明黄色激发闪电符号 -->
+    <path d="M58 38 L42 54 H52 L50 70 L66 54 H56 L58 38 Z" fill="#FBC02D"/>
+</svg>

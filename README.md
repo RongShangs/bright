@@ -2,6 +2,12 @@
 
 小米17 Pro / 17 Pro Max 背屏亮度一键控制工具。Root 权限下，一键锁定背屏最大亮度或恢复系统控制。
 
+## 📱 应用界面
+
+![应用界面](website/show.jpg)
+
+*软件接管 vs 系统控制 两种状态一目了然*
+
 ## ⚡ 功能
 
 - **自动 Root 检测** — 启动时验证 Root 权限，未 Root 则提示退出
@@ -9,6 +15,7 @@
 - **一键恢复系统控制** — `chmod 644` 恢复权限，系统重新接管
 - **状态智能识别** — 通过文件权限位判断当前状态，避免误操作
 - **控制中心磁贴**（v1.1） — 下拉通知栏一键切换，无需打开 App
+- **亮度滑块**（v1.2） — 实时调节亮度，精确控制
 
 ## 📋 适用环境
 
@@ -41,8 +48,11 @@
 
 ## 📦 下载
 
-| v1.1 | [app-release-v1.1.apk](https://github.com/RongShangs/bright/releases/download/v1.1/app-release-v1.1.apk) | 新增控制中心磁贴 |
-| v1.0 | [app-release.apk](https://github.com/RongShangs/bright/releases/download/v1.0/app-release.apk) | 首个发布版本 |
+| 版本 | 文件 | 说明 |
+|------|------|------|
+| v1.2 | [app-release-new.apk](website/app-release-new.apk) | 新增亮度滑块，全新界面 |
+| v1.1 | [app-release-v1.1.apk](website/app-release-v1.1.apk) | 新增控制中心磁贴 |
+| v1.0 | [app-release.apk](website/app-release.apk) | 首个发布版本 |
 
 推荐签名后安装
 
