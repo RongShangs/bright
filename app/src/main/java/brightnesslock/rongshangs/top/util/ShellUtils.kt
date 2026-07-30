@@ -4,58 +4,90 @@ import android.util.Log
 import java.io.BufferedReader
 import java.io.DataOutputStream
 import java.io.InputStreamReader
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 
 object ShellUtils {
     private const val TAG = "ShellUtils"
+    private var suProcess: Process? = null
+    private var os: DataOutputStream? = null
+    private var isReader: BufferedReader? = null
+    private var lastUsedTime: Long = 0
+    private const val TIMEOUT_MS: Long = 30000
+    private val scheduler = Executors.newSingleThreadScheduledExecutor()
 
-    fun isRootAvailable(): Boolean {
+    init {
+        scheduler.scheduleAtFixedRate({
+            checkAndRelease()
+        }, 1, 1, TimeUnit.MINUTES)
+    }
+
+    private fun isAlive(): Boolean {
         return try {
-            val process = Runtime.getRuntime().exec("su")
-            val os = DataOutputStream(process.outputStream)
-            os.writeBytes("exit\n")
-            os.flush()
-            val exitValue = process.waitFor()
-            exitValue == 0
-        } catch (e: Exception) {
-            Log.e(TAG, "Root check failed", e)
+            suProcess?.exitValue()
             false
+        } catch (e: IllegalThreadStateException) {
+            true
         }
     }
 
+    @Synchronized
     fun execRoot(command: String): ShellResult {
-        var process: Process? = null
-        var os: DataOutputStream? = null
-        var isReader: BufferedReader? = null
-        var errReader: BufferedReader? = null
-        
         try {
-            process = Runtime.getRuntime().exec("su")
-            os = DataOutputStream(process.outputStream)
-            os.writeBytes("$command\n")
-            os.writeBytes("exit\n")
-            os.flush()
-
-            val exitCode = process.waitFor()
+            if (suProcess == null || !isAlive()) {
+                destroy()
+                suProcess = Runtime.getRuntime().exec("su")
+                os = DataOutputStream(suProcess!!.outputStream)
+                isReader = BufferedReader(InputStreamReader(suProcess!!.inputStream))
+            }
+            lastUsedTime = System.currentTimeMillis()
             
-            isReader = BufferedReader(InputStreamReader(process.inputStream))
-            val output = isReader.readLines().joinToString("\n")
-            
-            errReader = BufferedReader(InputStreamReader(process.errorStream))
-            val error = errReader.readLines().joinToString("\n")
+            val marker = "__END_${System.currentTimeMillis()}__"
+            os!!.writeBytes("$command\n")
+            os!!.writeBytes("echo $marker\n")
+            os!!.flush()
 
-            return ShellResult(exitCode, output, error)
+            val output = StringBuilder()
+            var line: String?
+            while (true) {
+                line = isReader!!.readLine()
+                if (line == null || line.contains(marker)) break
+                output.append(line).append("\n")
+            }
+
+            return ShellResult(0, output.toString().trim(), "")
         } catch (e: Exception) {
             Log.e(TAG, "Command execution failed: $command", e)
+            destroy()
             return ShellResult(-1, "", e.message ?: "Unknown error")
+        }
+    }
+
+    fun isRootAvailable(): Boolean {
+        return execRoot("id").output.contains("uid=0")
+    }
+
+    @Synchronized
+    private fun checkAndRelease() {
+        if (suProcess != null && System.currentTimeMillis() - lastUsedTime > TIMEOUT_MS) {
+            destroy()
+        }
+    }
+
+    @Synchronized
+    fun destroy() {
+        try {
+            os?.writeBytes("exit\n")
+            os?.flush()
+            os?.close()
+            isReader?.close()
+            suProcess?.destroy()
+        } catch (e: Exception) {
+            // Ignore
         } finally {
-            try {
-                os?.close()
-                isReader?.close()
-                errReader?.close()
-                process?.destroy()
-            } catch (e: Exception) {
-                // Ignore
-            }
+            os = null
+            isReader = null
+            suProcess = null
         }
     }
 

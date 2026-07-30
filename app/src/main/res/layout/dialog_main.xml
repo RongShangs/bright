@@ -7,48 +7,64 @@
 
     <LinearLayout
         android:id="@+id/dialogCard"
-        android:layout_width="wrap_content"
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_gravity="center"
+        android:layout_marginHorizontal="20dp"
         android:background="@drawable/bg_dialog"
         android:orientation="horizontal"
-        android:padding="20dp"
-        android:elevation="8dp">
+        android:padding="12dp"
+        android:elevation="8dp"
+        android:baselineAligned="false">
 
-        <!-- Left Panel: Info -->
+        <!-- Left Panel: Info (50% Width) -->
         <LinearLayout
-            android:layout_width="160dp"
-            android:layout_height="240dp"
+            android:layout_width="0dp"
+            android:layout_height="180dp"
+            android:layout_weight="1"
             android:background="@drawable/bg_panel"
             android:orientation="vertical"
             android:padding="16dp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="背屏控制"
+                android:textColor="#333333"
+                android:textSize="16sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/deviceModel"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Device Model"
+                android:textColor="#999999"
+                android:textSize="10sp"
+                android:layout_marginTop="2dp" />
+
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="1dp"
+                android:background="#1A000000"
+                android:layout_marginVertical="8dp" />
 
             <TextView
                 android:id="@+id/takeoverStatus"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="当前为系统控制"
-                android:textColor="#333333"
-                android:textSize="14sp"
-                android:textStyle="bold" />
+                android:textColor="#666666"
+                android:textSize="12sp" />
 
             <TextView
                 android:id="@+id/brightnessValue"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="4dp"
-                android:text="亮度值 ----/----"
-                android:textColor="#666666"
-                android:textSize="12sp" />
-
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="16dp"
-                android:text="系统状态"
-                android:textColor="#333333"
-                android:textSize="14sp"
-                android:textStyle="bold" />
+                android:layout_marginTop="2dp"
+                android:text="----/----"
+                android:textColor="#999999"
+                android:textSize="10sp" />
 
             <TextView
                 android:id="@+id/rootStatus"
@@ -56,8 +72,8 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="4dp"
                 android:text="Root: 未知"
-                android:textColor="#666666"
-                android:textSize="12sp" />
+                android:textColor="#999999"
+                android:textSize="10sp" />
 
             <View
                 android:layout_width="0dp"
@@ -65,43 +81,93 @@
                 android:layout_weight="1" />
 
             <TextView
+                android:id="@+id/releasePage"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="发布页"
+                android:textColor="#1E88E5"
+                android:textSize="11sp"
+                android:clickable="true"
+                android:focusable="true"/>
+
+            <TextView
                 android:id="@+id/developerLink"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
+                android:layout_marginTop="2dp"
                 android:text="酷安@戎Shangs"
-                android:textColor="#1E88E5"
-                android:textSize="12sp"
+                android:textColor="#999999"
+                android:textSize="11sp"
                 android:clickable="true"
                 android:focusable="true"/>
         </LinearLayout>
 
-        <!-- Middle Panel: Slider -->
-        <brightnesslock.rongshangs.top.ui.VerticalBrightnessSlider
-            android:id="@+id/brightnessSlider"
-            android:layout_width="72dp"
-            android:layout_height="240dp"
-            android:layout_marginStart="12dp" />
+        <!-- Right Container (50% Width) -->
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="180dp"
+            android:layout_weight="1"
+            android:orientation="horizontal"
+            android:layout_marginStart="8dp">
 
-        <!-- Right Panel: Restore Button -->
-        <FrameLayout
-            android:id="@+id/restoreBtn"
-            android:layout_width="88dp"
-            android:layout_height="240dp"
-            android:layout_marginStart="12dp"
-            android:background="@drawable/bg_panel"
-            android:clickable="true"
-            android:focusable="true">
+            <!-- Middle Panel: Slider -->
+            <brightnesslock.rongshangs.top.ui.VerticalBrightnessSlider
+                android:id="@+id/brightnessSlider"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1" />
 
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_gravity="center"
-                android:gravity="center"
-                android:text="还原\n系统\n控制"
-                android:textColor="#333333"
-                android:textSize="16sp"
-                android:textStyle="bold" />
-        </FrameLayout>
+            <!-- Right Column: AOD Toggle + Restore Button -->
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
+                android:layout_marginStart="8dp"
+                android:orientation="vertical">
+
+                <FrameLayout
+                    android:id="@+id/aodToggleBtn"
+                    android:layout_width="match_parent"
+                    android:layout_height="0dp"
+                    android:layout_weight="1"
+                    android:background="@drawable/bg_panel"
+                    android:clickable="true"
+                    android:focusable="true">
+
+                    <TextView
+                        android:id="@+id/aodText"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_gravity="center"
+                        android:gravity="center"
+                        android:text="AOD\n已关"
+                        android:textColor="#333333"
+                        android:textSize="14sp"
+                        android:textStyle="bold" />
+                </FrameLayout>
+
+                <FrameLayout
+                    android:id="@+id/restoreBtn"
+                    android:layout_width="match_parent"
+                    android:layout_height="0dp"
+                    android:layout_weight="1"
+                    android:layout_marginTop="8dp"
+                    android:background="@drawable/bg_panel"
+                    android:clickable="true"
+                    android:focusable="true">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_gravity="center"
+                        android:gravity="center"
+                        android:text="还原\n系统\n控制"
+                        android:textColor="#333333"
+                        android:textSize="14sp"
+                        android:textStyle="bold" />
+                </FrameLayout>
+            </LinearLayout>
+        </LinearLayout>
 
     </LinearLayout>
 </FrameLayout>

@@ -25,8 +25,13 @@ class VerticalBrightnessSlider @JvmOverloads constructor(
         color = Color.WHITE
     }
     
+    private val clipPath = Path()
+    private val rectF = RectF()
+    
     private var sunIcon: Bitmap? = null
     private var onProgressChanged: ((Int) -> Unit)? = null
+    
+    private var lastY = 0f
 
     init {
         val drawable = ContextCompat.getDrawable(context, R.drawable.ic_sun)
@@ -34,6 +39,8 @@ class VerticalBrightnessSlider @JvmOverloads constructor(
             val bitmap = Bitmap.createBitmap(it.intrinsicWidth, it.intrinsicHeight, Bitmap.Config.ARGB_8888)
             val canvas = Canvas(bitmap)
             it.setBounds(0, 0, canvas.width, canvas.height)
+            // Apply gray color filter to sun icon
+            it.colorFilter = PorterDuffColorFilter(Color.parseColor("#999999"), PorterDuff.Mode.SRC_IN)
             it.draw(canvas)
             sunIcon = bitmap
         }
@@ -45,7 +52,7 @@ class VerticalBrightnessSlider @JvmOverloads constructor(
     }
 
     fun setProgress(value: Int) {
-        progress = value.toFloat() / maxBrightness
+        progress = (value.toFloat() / maxBrightness).coerceIn(0f, 1f)
         invalidate()
     }
 
@@ -56,43 +63,57 @@ class VerticalBrightnessSlider @JvmOverloads constructor(
     override fun onDraw(canvas: Canvas) {
         val w = width.toFloat()
         val h = height.toFloat()
-        val radius = w / 2
+        val radius = 24 * resources.displayMetrics.density
 
+        rectF.set(0f, 0f, w, h)
+        
         // Draw background
-        canvas.drawRoundRect(0f, 0f, w, h, radius, radius, bgPaint)
+        canvas.drawRoundRect(rectF, radius, radius, bgPaint)
 
         // Draw progress
         val progressHeight = h * progress
-        canvas.drawRoundRect(0f, h - progressHeight, w, h, radius, radius, progressPaint)
+        if (progressHeight > 0) {
+            canvas.save()
+            clipPath.reset()
+            clipPath.addRoundRect(rectF, radius, radius, Path.Direction.CW)
+            canvas.clipPath(clipPath)
+            canvas.drawRect(0f, h - progressHeight, w, h, progressPaint)
+            canvas.restore()
+        }
 
         // Draw icon
         sunIcon?.let {
             val iconX = (w - it.width) / 2
-            // Icon position logic: if progress is high enough, icon is on white background, otherwise on dark
-            // But reference shows icon roughly in the middle of the progress bar or fixed position
-            // Let's place it at 1/4 from the bottom of the widget
             val iconY = h - (h * 0.25f) - (it.height / 2)
-            
-            // To ensure icon is visible on white background, we might need a color filter or just use a contrasting color
-            // Reference has an orange sun.
             canvas.drawBitmap(it, iconX, iconY, null)
         }
     }
 
     override fun onTouchEvent(event: MotionEvent): Boolean {
         when (event.action) {
-            MotionEvent.ACTION_DOWN, MotionEvent.ACTION_MOVE -> {
-                val y = event.y
-                progress = 1.0f - (y / height).coerceIn(0f, 1f)
+            MotionEvent.ACTION_DOWN -> {
+                lastY = event.y
+                return true
+            }
+            MotionEvent.ACTION_MOVE -> {
+                val deltaY = lastY - event.y
+                val deltaProgress = deltaY / height
+                progress = (progress + deltaProgress).coerceIn(0f, 1f)
+                lastY = event.y
                 invalidate()
                 return true
             }
             MotionEvent.ACTION_UP -> {
                 val finalValue = (progress * maxBrightness).toInt()
                 onProgressChanged?.invoke(finalValue)
+                performClick()
                 return true
             }
         }
         return super.onTouchEvent(event)
+    }
+
+    override fun performClick(): Boolean {
+        return super.performClick()
     }
 }

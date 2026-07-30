@@ -14,51 +14,60 @@ object BrightnessManager {
     }
 
     fun getCurrentState(): BrightnessState {
-        // Check permissions of the brightness file
-        // We can use ls -l and check if it starts with -r--r--r-- (444) or -rw-r--r-- (644)
         val result = ShellUtils.execRoot("ls -l $BRIGHTNESS_PATH")
-        if (!result.isSuccess) {
-            Log.e(TAG, "Failed to get state: ${result.error}")
-            return BrightnessState.UNKNOWN
-        }
+        if (!result.isSuccess) return BrightnessState.UNKNOWN
 
         val output = result.output.trim()
         return when {
             output.startsWith("-r--r--r--") -> BrightnessState.LOCKED
             output.startsWith("-rw-r--r--") -> BrightnessState.SYSTEM
-            else -> {
-                Log.w(TAG, "Unexpected permissions: $output")
-                BrightnessState.UNKNOWN
-            }
+            else -> BrightnessState.UNKNOWN
         }
     }
 
-    fun lockBrightness(): Boolean {
-        val command = """
-            MAX_VAL=$(cat $MAX_BRIGHTNESS_PATH)
-            chmod 644 $BRIGHTNESS_PATH
-            echo ${'$'}MAX_VAL > $BRIGHTNESS_PATH
-            chmod 444 $BRIGHTNESS_PATH
-        """.trimIndent()
-        
-        val result = ShellUtils.execRoot(command)
-        if (!result.isSuccess) {
-            Log.e(TAG, "Failed to lock brightness: ${result.error}")
+    fun lockBrightness(targetValue: Int): Boolean {
+        for (attempt in 0 until 3) {
+            ShellUtils.execRoot("chmod 644 $BRIGHTNESS_PATH")
+            ShellUtils.execRoot("echo $targetValue > $BRIGHTNESS_PATH")
+            ShellUtils.execRoot("chmod 444 $BRIGHTNESS_PATH")
+            
+            Thread.sleep(100)
+            if (getCurrentBrightness() == targetValue) return true
         }
-        return result.isSuccess
+        return false
+    }
+
+    fun getMaxBrightness(): Int {
+        val result = ShellUtils.execRoot("cat $MAX_BRIGHTNESS_PATH")
+        return result.output.trim().toIntOrNull() ?: 4095
+    }
+
+    fun getCurrentBrightness(): Int {
+        val result = ShellUtils.execRoot("cat $BRIGHTNESS_PATH")
+        return result.output.trim().toIntOrNull() ?: 500
     }
 
     fun restoreSystemControl(): Boolean {
-        // According to requirements: chmod 644 and echo 500
         val command = """
             chmod 644 $BRIGHTNESS_PATH
             echo 500 > $BRIGHTNESS_PATH
         """.trimIndent()
-        
-        val result = ShellUtils.execRoot(command)
-        if (!result.isSuccess) {
-            Log.e(TAG, "Failed to restore system control: ${result.error}")
+        return ShellUtils.execRoot(command).isSuccess
+    }
+
+    // AOD Controls
+    fun isRearAodEnabled(): Boolean {
+        val result = ShellUtils.execRoot("settings get secure rear_doze_always_on")
+        return result.output.trim() == "1"
+    }
+
+    fun setRearAodEnabled(enabled: Boolean): Boolean {
+        val value = if (enabled) "1" else "0"
+        val success = ShellUtils.execRoot("settings put secure rear_doze_always_on $value").isSuccess
+        if (enabled && success) {
+            Thread.sleep(50)
+            ShellUtils.execRoot("input -d 1 keyevent KEYCODE_WAKEUP")
         }
-        return result.isSuccess
+        return success
     }
 }
