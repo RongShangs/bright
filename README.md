@@ -4,7 +4,7 @@
 
 ## 📱 应用界面
 
-![应用界面](website/show.jpg)
+<img width="1220" height="817" alt="4d1b1a04ac761a7a642459eef23f1074" src="https://github.com/user-attachments/assets/b80016f4-8680-4b3a-a439-2788e7d5c8af" />
 
 *卡片式界面，左侧状态面板 + 右侧亮度滑块与功能按钮*
 
@@ -62,12 +62,10 @@
 
 | 版本 | 文件 | 说明 |
 |------|------|------|
-| v1.3 | 待发布 | Su 进程复用、写入验证重试、AOD 开关、界面重构 |
+| v1.3 | 见release | Su 进程复用、写入验证重试、AOD 开关、界面重构 |
 | v1.2 | [app-release-new.apk](website/app-release-new.apk) | 新增亮度滑块，全新界面 |
 | v1.1 | [app-release-v1.1.apk](website/app-release-v1.1.apk) | 新增控制中心磁贴 |
 | v1.0 | [app-release.apk](website/app-release.apk) | 首个发布版本 |
-
-推荐签名后安装
 
 ## 📝 许可
 
