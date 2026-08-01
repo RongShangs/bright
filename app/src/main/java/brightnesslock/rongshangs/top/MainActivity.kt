@@ -3,8 +3,9 @@ package brightnesslock.rongshangs.top
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
-import android.os.Build
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.view.MotionEvent
 import android.view.View
 import android.widget.FrameLayout
@@ -14,29 +15,43 @@ import androidx.appcompat.app.AppCompatActivity
 import brightnesslock.rongshangs.top.util.BrightnessManager
 import brightnesslock.rongshangs.top.util.ShellUtils
 import brightnesslock.rongshangs.top.ui.VerticalBrightnessSlider
-import java.util.concurrent.Executors
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.concurrent.thread
 
 class MainActivity : AppCompatActivity() {
 
     private lateinit var takeoverStatus: TextView
-    private lateinit var brightnessValue: TextView
+    private lateinit var targetVal: TextView
+    private lateinit var currentVal: TextView
+    private lateinit var maxVal: TextView
     private lateinit var rootStatus: TextView
-    private lateinit var deviceModel: TextView
     private lateinit var aodText: TextView
     private lateinit var brightnessSlider: VerticalBrightnessSlider
     
     private val prefs by lazy { getSharedPreferences("config", Context.MODE_PRIVATE) }
-    private val singleThreadExecutor = Executors.newSingleThreadExecutor()
+    private val handler = Handler(Looper.getMainLooper())
+    
+    private var isUserSliding = false
+    private val isSyncing = AtomicBoolean(false)
+    private var lastTargetValue = -1
+    private var syncThread: Thread? = null
+
+    private val refreshRunnable = object : Runnable {
+        override fun run() {
+            updateCurrentBrightness()
+            handler.postDelayed(this, 300)
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.dialog_main)
 
         takeoverStatus = findViewById(R.id.takeoverStatus)
-        brightnessValue = findViewById(R.id.brightnessValue)
+        targetVal = findViewById(R.id.targetVal)
+        currentVal = findViewById(R.id.currentVal)
+        maxVal = findViewById(R.id.maxVal)
         rootStatus = findViewById(R.id.rootStatus)
-        deviceModel = findViewById(R.id.deviceModel)
         aodText = findViewById(R.id.aodText)
         brightnessSlider = findViewById(R.id.brightnessSlider)
         
@@ -45,9 +60,6 @@ class MainActivity : AppCompatActivity() {
         val aodToggleBtn = findViewById<FrameLayout>(R.id.aodToggleBtn)
         val developerLink = findViewById<TextView>(R.id.developerLink)
         val releasePage = findViewById<TextView>(R.id.releasePage)
-
-        // Set device model
-        deviceModel.text = "${Build.MANUFACTURER} ${Build.MODEL}"
 
         // Close on click outside
         rootContainer.setOnTouchListener { v, event ->
@@ -77,7 +89,7 @@ class MainActivity : AppCompatActivity() {
                 val success = BrightnessManager.setRearAodEnabled(!currentAod)
                 runOnUiThread {
                     if (success) {
-                        refreshUI()
+                        refreshFullUI()
                     } else {
                         Toast.makeText(this, "AOD设置失败", Toast.LENGTH_SHORT).show()
                     }
@@ -86,12 +98,13 @@ class MainActivity : AppCompatActivity() {
         }
 
         restoreBtn.setOnClickListener {
+            stopSync()
             thread {
                 val success = BrightnessManager.restoreSystemControl()
                 runOnUiThread {
                     if (success) {
                         Toast.makeText(this, "已恢复系统控制", Toast.LENGTH_SHORT).show()
-                        refreshUI()
+                        refreshFullUI()
                     } else {
                         Toast.makeText(this, "执行失败", Toast.LENGTH_SHORT).show()
                     }
@@ -99,25 +112,88 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        brightnessSlider.setOnProgressChangedListener { value ->
-            // Update local value immediately in text view
-            val max = BrightnessManager.getMaxBrightness()
-            brightnessValue.text = "$value / $max"
-            
-            // Execute set brightness in background
-            singleThreadExecutor.execute {
-                val success = BrightnessManager.lockBrightness(value)
-                if (success) {
-                    prefs.edit().putInt("target_brightness", value).apply()
-                }
-                
-                runOnUiThread {
-                    updateStatusLabels()
-                }
-            }
+        brightnessSlider.setOnSlidingListener { value ->
+            isUserSliding = true
+            targetVal.text = value.toString()
         }
 
-        refreshUI()
+        brightnessSlider.setOnProgressChangedListener { value ->
+            isUserSliding = false
+            lastTargetValue = value
+            startSyncLoop(value)
+        }
+
+        refreshFullUI()
+        handler.post(refreshRunnable)
+    }
+
+    private fun startSyncLoop(target: Int) {
+        stopSync()
+        isSyncing.set(true)
+        
+        runOnUiThread {
+            takeoverStatus.text = "修改中..."
+            takeoverStatus.setTextColor(0xFFFBC02D.toInt())
+        }
+
+        syncThread = thread(start = true) {
+            val startTime = System.currentTimeMillis()
+            var attempts = 0
+            val maxAttempts = 30
+            var finalSuccess = false
+            
+            try {
+                while (isSyncing.get() && attempts < maxAttempts) {
+                    // Timeout check (5 seconds)
+                    if (System.currentTimeMillis() - startTime > 5000) {
+                        break
+                    }
+
+                    attempts++
+                    BrightnessManager.lockBrightnessOnce(target)
+                    val current = BrightnessManager.getCurrentBrightness()
+                    
+                    if (current == target) {
+                        // Double verification for stability
+                        Thread.sleep(50)
+                        if (BrightnessManager.getCurrentBrightness() == target) {
+                            finalSuccess = true
+                            isSyncing.set(false)
+                            prefs.edit().putInt("target_brightness", target).apply()
+                        }
+                    }
+
+                    if (isSyncing.get()) {
+                        // Progressive delay: 1-10: 100ms, 11-20: 200ms, 21-30: 300ms
+                        val delay = when {
+                            attempts <= 10 -> 100L
+                            attempts <= 20 -> 200L
+                            else -> 300L
+                        }
+                        Thread.sleep(delay)
+                    }
+                }
+            } catch (e: InterruptedException) {
+                // Thread interrupted, exit loop
+            }
+
+            runOnUiThread {
+                if (!finalSuccess && !isSyncing.get() && attempts >= maxAttempts) {
+                    if (!ShellUtils.isRootAvailable()) {
+                        Toast.makeText(this@MainActivity, "Root未授权", Toast.LENGTH_SHORT).show()
+                    } else {
+                        Toast.makeText(this@MainActivity, "系统持续覆盖，修改失败", Toast.LENGTH_SHORT).show()
+                    }
+                }
+                updateStatusLabels()
+            }
+        }
+    }
+
+    private fun stopSync() {
+        isSyncing.set(false)
+        syncThread?.interrupt()
+        syncThread = null
     }
 
     private fun openUrl(url: String) {
@@ -129,19 +205,39 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun refreshUI() {
+    private fun refreshFullUI() {
         thread {
             val max = BrightnessManager.getMaxBrightness()
             val current = BrightnessManager.getCurrentBrightness()
+            val state = BrightnessManager.getCurrentState()
             val aodEnabled = BrightnessManager.isRearAodEnabled()
             
             runOnUiThread {
                 brightnessSlider.setMax(max)
-                brightnessSlider.setProgress(current)
-                brightnessValue.text = "$current / $max"
+                maxVal.text = max.toString()
+                currentVal.text = current.toString()
+                
+                if (state == BrightnessManager.BrightnessState.SYSTEM) {
+                    brightnessSlider.setProgress(0)
+                    targetVal.text = "——"
+                } else {
+                    brightnessSlider.setProgress(current)
+                    targetVal.text = current.toString()
+                    lastTargetValue = current
+                }
+                
                 aodText.text = if (aodEnabled) "AOD\n已开" else "AOD\n已关"
                 aodText.setTextColor(if (aodEnabled) 0xFF4CAF50.toInt() else 0xFF333333.toInt())
                 updateStatusLabels()
+            }
+        }
+    }
+
+    private fun updateCurrentBrightness() {
+        thread {
+            val current = BrightnessManager.getCurrentBrightness()
+            runOnUiThread {
+                currentVal.text = current.toString()
             }
         }
     }
@@ -150,22 +246,43 @@ class MainActivity : AppCompatActivity() {
         thread {
             val isRoot = ShellUtils.isRootAvailable()
             val state = BrightnessManager.getCurrentState()
+            val current = BrightnessManager.getCurrentBrightness()
+            val isSyncActive = isSyncing.get()
             
             runOnUiThread {
                 if (!isRoot) {
                     rootStatus.text = "Root: 未授权"
-                    rootStatus.setTextColor(0xFFFF0000.toInt())
+                    rootStatus.visibility = View.VISIBLE
                 } else {
-                    rootStatus.text = "Root: 已授权"
-                    rootStatus.setTextColor(0xFF4CAF50.toInt())
+                    rootStatus.visibility = View.GONE
                 }
 
-                if (state == BrightnessManager.BrightnessState.LOCKED) {
-                    takeoverStatus.text = "当前为软件接管"
-                    takeoverStatus.setTextColor(0xFF4CAF50.toInt())
-                } else {
-                    takeoverStatus.text = "当前为系统控制"
-                    takeoverStatus.setTextColor(0xFF333333.toInt())
+                when {
+                    isSyncActive -> {
+                        takeoverStatus.text = "修改中..."
+                        takeoverStatus.setTextColor(0xFFFBC02D.toInt())
+                    }
+                    lastTargetValue == -1 -> {
+                        takeoverStatus.text = "未修改"
+                        takeoverStatus.setTextColor(0xFF333333.toInt())
+                        if (!isUserSliding) {
+                            targetVal.text = "——"
+                            brightnessSlider.setProgress(0)
+                        }
+                    }
+                    state == BrightnessManager.BrightnessState.SYSTEM -> {
+                        takeoverStatus.text = "未修改"
+                        takeoverStatus.setTextColor(0xFF333333.toInt())
+                        if (!isUserSliding) {
+                            targetVal.text = "——"
+                            brightnessSlider.setProgress(0)
+                            lastTargetValue = -1
+                        }
+                    }
+                    else -> {
+                        takeoverStatus.text = "已修改"
+                        takeoverStatus.setTextColor(0xFF4CAF50.toInt())
+                    }
                 }
             }
         }
@@ -173,7 +290,8 @@ class MainActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
-        singleThreadExecutor.shutdown()
+        stopSync()
+        handler.removeCallbacks(refreshRunnable)
         ShellUtils.destroy()
     }
 }

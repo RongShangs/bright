@@ -13,10 +13,51 @@ object BrightnessManager {
         UNKNOWN
     }
 
+    fun getCurrentBrightness(): Int {
+        return try {
+            val result = ShellUtils.execRoot("cat $BRIGHTNESS_PATH")
+            result.output.trim().toIntOrNull() ?: 500
+        } catch (e: Exception) {
+            Log.e(TAG, "获取亮度失败", e)
+            500
+        }
+    }
+
+    fun getMaxBrightness(): Int {
+        return try {
+            val result = ShellUtils.execRoot("cat $MAX_BRIGHTNESS_PATH")
+            result.output.trim().toIntOrNull() ?: 4095
+        } catch (e: Exception) {
+            Log.e(TAG, "获取最大亮度失败", e)
+            4095
+        }
+    }
+
+    /**
+     * 设置亮度核心逻辑 (去除了无效的sync，合并指令)
+     */
+    fun lockBrightnessOnce(targetValue: Int): Boolean {
+        // 合并指令执行，去除无效的sync
+        val cmd = "chmod 644 $BRIGHTNESS_PATH && echo $targetValue > $BRIGHTNESS_PATH && chmod 444 $BRIGHTNESS_PATH"
+        val result = ShellUtils.execRoot(cmd)
+        return result.isSuccess
+    }
+
+    /**
+     * 恢复系统控制
+     */
+    fun restoreSystemControl(): Boolean {
+        val cmd = "chmod 644 $BRIGHTNESS_PATH && echo 500 > $BRIGHTNESS_PATH"
+        return ShellUtils.execRoot(cmd).isSuccess
+    }
+
+    /**
+     * 检查当前接管状态
+     */
     fun getCurrentState(): BrightnessState {
         val result = ShellUtils.execRoot("ls -l $BRIGHTNESS_PATH")
         if (!result.isSuccess) return BrightnessState.UNKNOWN
-
+        
         val output = result.output.trim()
         return when {
             output.startsWith("-r--r--r--") -> BrightnessState.LOCKED
@@ -25,37 +66,8 @@ object BrightnessManager {
         }
     }
 
-    fun lockBrightness(targetValue: Int): Boolean {
-        for (attempt in 0 until 3) {
-            ShellUtils.execRoot("chmod 644 $BRIGHTNESS_PATH")
-            ShellUtils.execRoot("echo $targetValue > $BRIGHTNESS_PATH")
-            ShellUtils.execRoot("chmod 444 $BRIGHTNESS_PATH")
-            
-            Thread.sleep(100)
-            if (getCurrentBrightness() == targetValue) return true
-        }
-        return false
-    }
+    // --- 背屏AOD控制 ---
 
-    fun getMaxBrightness(): Int {
-        val result = ShellUtils.execRoot("cat $MAX_BRIGHTNESS_PATH")
-        return result.output.trim().toIntOrNull() ?: 4095
-    }
-
-    fun getCurrentBrightness(): Int {
-        val result = ShellUtils.execRoot("cat $BRIGHTNESS_PATH")
-        return result.output.trim().toIntOrNull() ?: 500
-    }
-
-    fun restoreSystemControl(): Boolean {
-        val command = """
-            chmod 644 $BRIGHTNESS_PATH
-            echo 500 > $BRIGHTNESS_PATH
-        """.trimIndent()
-        return ShellUtils.execRoot(command).isSuccess
-    }
-
-    // AOD Controls
     fun isRearAodEnabled(): Boolean {
         val result = ShellUtils.execRoot("settings get secure rear_doze_always_on")
         return result.output.trim() == "1"
@@ -63,11 +75,16 @@ object BrightnessManager {
 
     fun setRearAodEnabled(enabled: Boolean): Boolean {
         val value = if (enabled) "1" else "0"
-        val success = ShellUtils.execRoot("settings put secure rear_doze_always_on $value").isSuccess
+        val cmd = "settings put secure rear_doze_always_on $value"
+        
+        val success = ShellUtils.execRoot(cmd).isSuccess
+        
+        // 开启时自动唤醒背屏
         if (enabled && success) {
-            Thread.sleep(50)
+            try { Thread.sleep(50) } catch (e: Exception) {}
             ShellUtils.execRoot("input -d 1 keyevent KEYCODE_WAKEUP")
         }
+
         return success
     }
 }

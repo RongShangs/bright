@@ -30,6 +30,7 @@ class VerticalBrightnessSlider @JvmOverloads constructor(
     
     private var sunIcon: Bitmap? = null
     private var onProgressChanged: ((Int) -> Unit)? = null
+    private var onSliding: ((Int) -> Unit)? = null
     
     private var lastY = 0f
 
@@ -39,7 +40,6 @@ class VerticalBrightnessSlider @JvmOverloads constructor(
             val bitmap = Bitmap.createBitmap(it.intrinsicWidth, it.intrinsicHeight, Bitmap.Config.ARGB_8888)
             val canvas = Canvas(bitmap)
             it.setBounds(0, 0, canvas.width, canvas.height)
-            // Apply gray color filter to sun icon
             it.colorFilter = PorterDuffColorFilter(Color.parseColor("#999999"), PorterDuff.Mode.SRC_IN)
             it.draw(canvas)
             sunIcon = bitmap
@@ -58,6 +58,10 @@ class VerticalBrightnessSlider @JvmOverloads constructor(
 
     fun setOnProgressChangedListener(listener: (Int) -> Unit) {
         onProgressChanged = listener
+    }
+
+    fun setOnSlidingListener(listener: (Int) -> Unit) {
+        onSliding = listener
     }
 
     override fun onDraw(canvas: Canvas) {
@@ -101,6 +105,7 @@ class VerticalBrightnessSlider @JvmOverloads constructor(
                 progress = (progress + deltaProgress).coerceIn(0f, 1f)
                 lastY = event.y
                 invalidate()
+                onSliding?.invoke((progress * maxBrightness).toInt())
                 return true
             }
             MotionEvent.ACTION_UP -> {

@@ -24,30 +24,21 @@
             android:layout_weight="1"
             android:background="@drawable/bg_panel"
             android:orientation="vertical"
-            android:padding="16dp">
+            android:padding="14dp">
 
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="背屏控制"
                 android:textColor="#333333"
-                android:textSize="16sp"
+                android:textSize="18sp"
                 android:textStyle="bold" />
-
-            <TextView
-                android:id="@+id/deviceModel"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="Device Model"
-                android:textColor="#999999"
-                android:textSize="10sp"
-                android:layout_marginTop="2dp" />
 
             <View
                 android:layout_width="match_parent"
                 android:layout_height="1dp"
                 android:background="#1A000000"
-                android:layout_marginVertical="8dp" />
+                android:layout_marginVertical="6dp" />
 
             <TextView
                 android:id="@+id/takeoverStatus"
@@ -55,25 +46,82 @@
                 android:layout_height="wrap_content"
                 android:text="当前为系统控制"
                 android:textColor="#666666"
-                android:textSize="12sp" />
+                android:textSize="11sp"
+                android:textStyle="bold" />
 
-            <TextView
-                android:id="@+id/brightnessValue"
-                android:layout_width="wrap_content"
+            <!-- 3x2 Grid for Brightness Info -->
+            <GridLayout
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="2dp"
-                android:text="----/----"
-                android:textColor="#999999"
-                android:textSize="10sp" />
+                android:layout_marginTop="8dp"
+                android:columnCount="2"
+                android:rowCount="3"
+                android:orientation="horizontal">
+
+                <!-- Row 1: Target -->
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="目标"
+                    android:textColor="#999999"
+                    android:textSize="11sp" />
+                <TextView
+                    android:id="@+id/targetVal"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="end"
+                    android:text="----"
+                    android:textColor="#333333"
+                    android:textSize="11sp"
+                    android:textStyle="bold" />
+
+                <!-- Row 2: Current -->
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="2dp"
+                    android:text="当前"
+                    android:textColor="#999999"
+                    android:textSize="11sp" />
+                <TextView
+                    android:id="@+id/currentVal"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="end"
+                    android:layout_marginTop="2dp"
+                    android:text="----"
+                    android:textColor="#1E88E5"
+                    android:textSize="11sp"
+                    android:textStyle="bold" />
+
+                <!-- Row 3: Max -->
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="2dp"
+                    android:text="最大"
+                    android:textColor="#999999"
+                    android:textSize="11sp" />
+                <TextView
+                    android:id="@+id/maxVal"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="end"
+                    android:layout_marginTop="2dp"
+                    android:text="----"
+                    android:textColor="#999999"
+                    android:textSize="11sp" />
+            </GridLayout>
 
             <TextView
                 android:id="@+id/rootStatus"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="4dp"
-                android:text="Root: 未知"
-                android:textColor="#999999"
-                android:textSize="10sp" />
+                android:text="Root: 未授权"
+                android:textColor="#FF5252"
+                android:textSize="10sp"
+                android:visibility="gone" />
 
             <View
                 android:layout_width="0dp"
@@ -86,7 +134,7 @@
                 android:layout_height="wrap_content"
                 android:text="发布页"
                 android:textColor="#1E88E5"
-                android:textSize="11sp"
+                android:textSize="10sp"
                 android:clickable="true"
                 android:focusable="true"/>
 
@@ -94,10 +142,10 @@
                 android:id="@+id/developerLink"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="2dp"
+                android:layout_marginTop="1dp"
                 android:text="酷安@戎Shangs"
                 android:textColor="#999999"
-                android:textSize="11sp"
+                android:textSize="10sp"
                 android:clickable="true"
                 android:focusable="true"/>
         </LinearLayout>
