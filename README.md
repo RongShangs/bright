@@ -4,7 +4,8 @@
 
 ## 📱 应用界面
 
-<img width="1220" height="817" alt="4d1b1a04ac761a7a642459eef23f1074" src="https://github.com/user-attachments/assets/b80016f4-8680-4b3a-a439-2788e7d5c8af" />
+<img width="1220" height="866" alt="6a8fb84a461bb568155e1327994b6302" src="https://github.com/user-attachments/assets/cf4d712e-9daf-4ef4-957c-b84033193057" />
+
 
 *卡片式界面，左侧状态面板（目标/当前/最大亮度） + 右侧亮度滑块与功能按钮*
 
