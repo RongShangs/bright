@@ -159,15 +159,6 @@ startWatchdog(1483):
     └─ 清理状态（is_takeover=false, target=-1）
 ```
 
-### 适配过程中修复的代码问题
-
-| 问题 | 修复 |
-|------|------|
-| su 进程 EPIPE 崩溃 | execRoot 捕获 IOException 重建 su 重试 |
-| 脚本 PID 多了个 $ | 修正为 `$$` |
-| 恢复后状态残留 | 清除 is_takeover / target_brightness |
-| assets 占位符 | 替换为真实 C 二进制 + 释放逻辑 |
-
 ### 方案对比总结
 
 | 维度 | 广播方案 | Shell 守护 | **C 守护（最终）** |
