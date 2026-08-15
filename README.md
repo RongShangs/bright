@@ -69,8 +69,7 @@ app/src/main/cpp/watchdog.c  →  静态编译 ARM64 二进制  →  /data/local
 - **恢复流程**：`chmod 644` 解锁 → 写入目标值 → `chmod 444` 重新锁定
 - **PID 管理**：`/data/local/tmp/bright_watchdog.pid`，还原系统控制时自动停止
 
-## 📚 澎湃OS4 背屏亮度适配全记录
-
+## 📚 澎湃OS4 背屏亮度适配
 ### 问题背景
 
 **OS3→OS4 变化**：
@@ -92,23 +91,6 @@ app/src/main/cpp/watchdog.c  →  静态编译 ARM64 二进制  →  /data/local
 | 8 | **Shell 轮询守护** | 主动读节点，异常时写回 | ✅ | — |
 | 9 | **C 二进制轮询守护** | 同上，C 实现 | ✅ **最终采用** | — |
 
-### 为什么前 7 种都失败
-
-```
-根本原因：OS4 的背光控制链路完全变化
-
-OS3: APP直接写sysfs → chmod444 → 系统读不到 → 亮度锁死 ✅
-OS4: 系统走SurfaceControl → 绕过sysfs
-     遮盖时直接写0（root无视权限）
-     拿出时依赖写sysfs恢复（被锁则放弃）
-
-事件类方案（inotify/poll/广播）：
-  系统不产生任何可感知的事件 → 全失效
-
-权限类方案（chmod/bind/selinux）：
-  拦不住root + 反而阻止系统恢复 → 失效
-```
-
 ### 最终方案：C 二进制轮询守护
 
 ```
@@ -120,14 +102,6 @@ OS4: 系统走SurfaceControl → 绕过sysfs
     ↓
 自适应：正常4s低频，异常后1s快速恢复
 ```
-
-**为什么可行**：
-
-| 特性 | 说明 |
-|------|------|
-| **主动轮询** | 不依赖任何系统事件，自己读节点 |
-| **root 进程** | 独立于 APP，不受 MIUI 冻结/后台限制 |
-| **自适应** | 平时 4s（CPU 0%），异常后 1s（快速恢复） |
 
 **资源占用（实测）**：
 
@@ -186,12 +160,12 @@ startWatchdog(1483):
 
 | 版本 | 文件 | 说明 |
 |------|------|------|
-| v1.5 | [bright_1.5.apk](website/bright_1.5.apk) | C 守护进程，适配 Hyper OS 4 |
+| v1.5 | 见release | C 守护进程，适配 Hyper OS 4 |
 | v1.4 | 见release | 实时亮度监控、渐进式同步循环、指令合并优化 |
 | v1.3 | 见release | Su 进程复用、写入验证重试、AOD 开关、界面重构 |
-| v1.2 | [app-release-new.apk](website/app-release-new.apk) | 新增亮度滑块，全新界面 |
-| v1.1 | [app-release-v1.1.apk](website/app-release-v1.1.apk) | 新增控制中心磁贴 |
-| v1.0 | [app-release.apk](website/app-release.apk) | 首个发布版本 |
+| v1.2 | 见release | 新增亮度滑块，全新界面 |
+| v1.1 | 见release | 新增控制中心磁贴 |
+| v1.0 | 见release | 首个发布版本 |
 
 ## 📝 许可
 
