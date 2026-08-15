@@ -6,6 +6,7 @@ import android.net.Uri
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.util.Log
 import android.view.MotionEvent
 import android.view.View
 import android.widget.FrameLayout
@@ -15,6 +16,7 @@ import androidx.appcompat.app.AppCompatActivity
 import brightnesslock.rongshangs.top.util.BrightnessManager
 import brightnesslock.rongshangs.top.util.ShellUtils
 import brightnesslock.rongshangs.top.ui.VerticalBrightnessSlider
+import java.io.File
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.concurrent.thread
 
@@ -61,6 +63,8 @@ class MainActivity : AppCompatActivity() {
         val developerLink = findViewById<TextView>(R.id.developerLink)
         val releasePage = findViewById<TextView>(R.id.releasePage)
 
+        releaseWatchdogBinary()
+
         // Close on click outside
         rootContainer.setOnTouchListener { v, event ->
             if (event.action == MotionEvent.ACTION_DOWN) {
@@ -103,6 +107,12 @@ class MainActivity : AppCompatActivity() {
                 val success = BrightnessManager.restoreSystemControl()
                 runOnUiThread {
                     if (success) {
+                        lastTargetValue = -1
+                        prefs.edit()
+                            .putBoolean("is_takeover", false)
+                            .putInt("target_brightness", -1)
+                            .apply()
+                        
                         Toast.makeText(this, "已恢复系统控制", Toast.LENGTH_SHORT).show()
                         refreshFullUI()
                     } else {
@@ -120,11 +130,30 @@ class MainActivity : AppCompatActivity() {
         brightnessSlider.setOnProgressChangedListener { value ->
             isUserSliding = false
             lastTargetValue = value
+            prefs.edit().putBoolean("is_takeover", true).apply()
             startSyncLoop(value)
         }
 
         refreshFullUI()
         handler.post(refreshRunnable)
+    }
+
+    private fun releaseWatchdogBinary() {
+        thread {
+            try {
+                val input = assets.open("watchdog_c")
+                val bytes = input.readBytes()
+                input.close()
+                val f = File(filesDir, "watchdog_c")
+                f.writeBytes(bytes)
+                f.setExecutable(true)
+                // Copy to executable location
+                ShellUtils.execRoot("cp ${f.absolutePath} ${BrightnessManager.WATCHDOG_BIN}")
+                ShellUtils.execRoot("chmod 777 ${BrightnessManager.WATCHDOG_BIN}")
+            } catch (e: Exception) {
+                Log.e("Watchdog", "释放二进制失败", e)
+            }
+        }
     }
 
     private fun startSyncLoop(target: Int) {
@@ -144,7 +173,6 @@ class MainActivity : AppCompatActivity() {
             
             try {
                 while (isSyncing.get() && attempts < maxAttempts) {
-                    // Timeout check (5 seconds)
                     if (System.currentTimeMillis() - startTime > 5000) {
                         break
                     }
@@ -154,17 +182,17 @@ class MainActivity : AppCompatActivity() {
                     val current = BrightnessManager.getCurrentBrightness()
                     
                     if (current == target) {
-                        // Double verification for stability
                         Thread.sleep(50)
                         if (BrightnessManager.getCurrentBrightness() == target) {
                             finalSuccess = true
                             isSyncing.set(false)
                             prefs.edit().putInt("target_brightness", target).apply()
+                            // Start the C Watchdog
+                            BrightnessManager.startWatchdog(target)
                         }
                     }
 
                     if (isSyncing.get()) {
-                        // Progressive delay: 1-10: 100ms, 11-20: 200ms, 21-30: 300ms
                         val delay = when {
                             attempts <= 10 -> 100L
                             attempts <= 20 -> 200L
@@ -174,7 +202,6 @@ class MainActivity : AppCompatActivity() {
                     }
                 }
             } catch (e: InterruptedException) {
-                // Thread interrupted, exit loop
             }
 
             runOnUiThread {
@@ -220,6 +247,7 @@ class MainActivity : AppCompatActivity() {
                 if (state == BrightnessManager.BrightnessState.SYSTEM) {
                     brightnessSlider.setProgress(0)
                     targetVal.text = "——"
+                    lastTargetValue = -1
                 } else {
                     brightnessSlider.setProgress(current)
                     targetVal.text = current.toString()
@@ -246,7 +274,6 @@ class MainActivity : AppCompatActivity() {
         thread {
             val isRoot = ShellUtils.isRootAvailable()
             val state = BrightnessManager.getCurrentState()
-            val current = BrightnessManager.getCurrentBrightness()
             val isSyncActive = isSyncing.get()
             
             runOnUiThread {

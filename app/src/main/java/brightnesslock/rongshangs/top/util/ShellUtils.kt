@@ -3,6 +3,7 @@ package brightnesslock.rongshangs.top.util
 import android.util.Log
 import java.io.BufferedReader
 import java.io.DataOutputStream
+import java.io.IOException
 import java.io.InputStreamReader
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
@@ -17,7 +18,7 @@ object ShellUtils {
     private val scheduler = Executors.newSingleThreadScheduledExecutor()
 
     init {
-        scheduler.scheduleAtFixedRate({
+        scheduler.scheduleWithFixedDelay({
             checkAndRelease()
         }, 1, 1, TimeUnit.MINUTES)
     }
@@ -34,19 +35,32 @@ object ShellUtils {
     @Synchronized
     fun execRoot(command: String): ShellResult {
         try {
+            // 1. Ensure su process exists and is alive
             if (suProcess == null || !isAlive()) {
                 destroy()
-                suProcess = Runtime.getRuntime().exec("su")
-                os = DataOutputStream(suProcess!!.outputStream)
-                isReader = BufferedReader(InputStreamReader(suProcess!!.inputStream))
+                createSuProcess()
             }
-            lastUsedTime = System.currentTimeMillis()
             
+            lastUsedTime = System.currentTimeMillis()
             val marker = "__END_${System.currentTimeMillis()}__"
-            os!!.writeBytes("$command\n")
-            os!!.writeBytes("echo $marker\n")
-            os!!.flush()
+            
+            // 2. Try to send command (catch EPIPE)
+            try {
+                os!!.writeBytes("$command\n")
+                os!!.writeBytes("echo $marker\n")
+                os!!.flush()
+            } catch (e: IOException) {
+                // Fix: su process died (EPIPE), recreate and retry once
+                Log.w(TAG, "su process died (EPIPE), recreating and retrying...")
+                destroy()
+                createSuProcess()
+                
+                os!!.writeBytes("$command\n")
+                os!!.writeBytes("echo $marker\n")
+                os!!.flush()
+            }
 
+            // 3. Read output until marker
             val output = StringBuilder()
             var line: String?
             while (true) {
@@ -61,6 +75,15 @@ object ShellUtils {
             destroy()
             return ShellResult(-1, "", e.message ?: "Unknown error")
         }
+    }
+
+    /**
+     * Create su process (for initial use and reconstruction)
+     */
+    private fun createSuProcess() {
+        suProcess = Runtime.getRuntime().exec("su")
+        os = DataOutputStream(suProcess!!.outputStream)
+        isReader = BufferedReader(InputStreamReader(suProcess!!.inputStream))
     }
 
     fun isRootAvailable(): Boolean {
