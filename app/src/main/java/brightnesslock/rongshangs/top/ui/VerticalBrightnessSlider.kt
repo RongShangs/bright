@@ -18,11 +18,17 @@ class VerticalBrightnessSlider @JvmOverloads constructor(
     private var maxBrightness = 4095
     
     private val bgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = Color.parseColor("#1A000000")
+        color = ContextCompat.getColor(context, R.color.slider_background)
     }
     
     private val progressPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = Color.WHITE
+        color = ContextCompat.getColor(context, R.color.accent)
+    }
+
+    private val borderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = ContextCompat.getColor(context, R.color.slider_border)
+        style = Paint.Style.STROKE
+        strokeWidth = resources.displayMetrics.density
     }
     
     private val clipPath = Path()
@@ -40,14 +46,17 @@ class VerticalBrightnessSlider @JvmOverloads constructor(
             val bitmap = Bitmap.createBitmap(it.intrinsicWidth, it.intrinsicHeight, Bitmap.Config.ARGB_8888)
             val canvas = Canvas(bitmap)
             it.setBounds(0, 0, canvas.width, canvas.height)
-            it.colorFilter = PorterDuffColorFilter(Color.parseColor("#999999"), PorterDuff.Mode.SRC_IN)
+            it.colorFilter = PorterDuffColorFilter(
+                ContextCompat.getColor(context, R.color.slider_icon),
+                PorterDuff.Mode.SRC_IN
+            )
             it.draw(canvas)
             sunIcon = bitmap
         }
     }
 
     fun setMax(max: Int) {
-        maxBrightness = max
+        maxBrightness = max.coerceAtLeast(1)
         invalidate()
     }
 
@@ -85,6 +94,10 @@ class VerticalBrightnessSlider @JvmOverloads constructor(
             canvas.restore()
         }
 
+        val borderInset = borderPaint.strokeWidth / 2
+        rectF.inset(borderInset, borderInset)
+        canvas.drawRoundRect(rectF, radius, radius, borderPaint)
+
         // Draw icon
         sunIcon?.let {
             val iconX = (w - it.width) / 2
@@ -108,7 +121,7 @@ class VerticalBrightnessSlider @JvmOverloads constructor(
                 onSliding?.invoke((progress * maxBrightness).toInt())
                 return true
             }
-            MotionEvent.ACTION_UP -> {
+            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
                 val finalValue = (progress * maxBrightness).toInt()
                 onProgressChanged?.invoke(finalValue)
                 performClick()

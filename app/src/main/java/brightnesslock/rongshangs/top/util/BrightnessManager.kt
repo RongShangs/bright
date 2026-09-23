@@ -1,6 +1,8 @@
 package brightnesslock.rongshangs.top.util
 
+import android.content.Context
 import android.util.Log
+import java.io.File
 
 object BrightnessManager {
     private const val TAG = "BrightnessManager"
@@ -42,13 +44,29 @@ object BrightnessManager {
     /**
      * 启动C语言守护进程
      */
-    fun startWatchdog(target: Int) {
+    fun startWatchdog(context: Context, target: Int): Boolean {
         stopWatchdog()
-        ShellUtils.destroy()
-        
-        // 启动C守护（后台独立进程）
-        ShellUtils.execRoot("nohup $WATCHDOG_BIN $target > /dev/null 2>&1 &")
-        Log.d(TAG, "C Watchdog started, target=$target")
+        return try {
+            val localBinary = File(context.filesDir, "watchdog_c")
+            context.assets.open("watchdog_c").use { input ->
+                localBinary.outputStream().use { output -> input.copyTo(output) }
+            }
+            localBinary.setExecutable(true)
+
+            val install = ShellUtils.execRoot(
+                "cp '${localBinary.absolutePath}' $WATCHDOG_BIN && chmod 755 $WATCHDOG_BIN"
+            )
+            if (!install.isSuccess) return false
+
+            val started = ShellUtils.execRoot(
+                "nohup $WATCHDOG_BIN $target > /dev/null 2>&1 &"
+            ).isSuccess
+            if (started) Log.d(TAG, "C Watchdog started, target=$target")
+            started
+        } catch (e: Exception) {
+            Log.e(TAG, "启动守护进程失败", e)
+            false
+        }
     }
 
     /**
@@ -56,13 +74,17 @@ object BrightnessManager {
      */
     fun stopWatchdog() {
         ShellUtils.execRoot("if [ -f $WATCHDOG_PID ]; then kill ${'$'}(cat $WATCHDOG_PID) 2>/dev/null; rm -f $WATCHDOG_PID; fi")
-        ShellUtils.execRoot("pkill -f bright_watchdog")
+        ShellUtils.execRoot("pkill -x bright_watchdog 2>/dev/null || true")
         Log.d(TAG, "Watchdog stopped")
     }
 
     fun restoreSystemControl(): Boolean {
         stopWatchdog()
-        return ShellUtils.execRoot("chmod 644 $BRIGHTNESS_PATH && echo 500 > $BRIGHTNESS_PATH").isSuccess
+        val success = ShellUtils.execRoot(
+            "chmod 644 $BRIGHTNESS_PATH && echo 500 > $BRIGHTNESS_PATH"
+        ).isSuccess
+        ShellUtils.destroy()
+        return success
     }
 
     fun getCurrentState(): BrightnessState {

@@ -1,19 +1,23 @@
 package brightnesslock.rongshangs.top
 
+import android.annotation.SuppressLint
 import android.app.PendingIntent
 import android.content.Intent
 import android.os.Build
 import android.service.quicksettings.Tile
 import android.service.quicksettings.TileService
 import brightnesslock.rongshangs.top.util.BrightnessManager
+import kotlin.concurrent.thread
 
 class BrightnessTileService : TileService() {
 
     override fun onStartListening() {
         super.onStartListening()
-        updateTileState()
+        thread(name = "tile-state") { updateTileState() }
     }
 
+    @SuppressLint("StartActivityAndCollapseDeprecated")
+    @Suppress("DEPRECATION")
     override fun onClick() {
         super.onClick()
         val intent = Intent(this, MainActivity::class.java).apply {
@@ -27,7 +31,6 @@ class BrightnessTileService : TileService() {
             )
             startActivityAndCollapse(pendingIntent)
         } else {
-            @Suppress("DEPRECATION")
             startActivityAndCollapse(intent)
         }
     }
