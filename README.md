@@ -12,6 +12,13 @@
 
 *紧凑悬浮面板：左侧状态信息 + 中间亮度滑块 + 右侧快捷操作。v1.6 已移除冗余标题栏并适配深浅色模式。*
 
+## 🛠️ v1.6.1 修复
+
+- 控制中心磁贴在已有悬浮权限时直接启动 Overlay Service，绕开 HyperOS 的临时 Activity 启动限制
+- 点击磁贴后通过一次性 Root 命令收起控制中心，不增加持续后台任务
+- 磁贴状态改为读取持久化接管状态，不再因瞬时 Root 查询失败变成灰色不可点击
+- v1.6.1 沿用 v1.6 发布证书，已安装 v1.6 的用户可以直接覆盖升级
+
 ## 🆕 v1.6 更新
 
 - 使用系统悬浮层替代透明 Activity，打开面板不会暂停后方应用
@@ -178,6 +185,7 @@ startWatchdog(1483):
 
 | 版本 | 文件 | 说明 |
 |------|------|------|
+| v1.6.1 | [GitHub Release](https://github.com/RongShangs/bright/releases/tag/v1.6.1) | 修复磁贴短时打不开和偶发变灰 |
 | v1.6 | [GitHub Release](https://github.com/RongShangs/bright/releases/tag/v1.6) | 非阻塞悬浮面板、玻璃外观、磁贴稳定性与资源释放优化 |
 | v1.5 | 见release | C 守护进程，适配 Hyper OS 4 |
 | v1.4 | 见release | 实时亮度监控、渐进式同步循环、指令合并优化 |
@@ -191,6 +199,7 @@ startWatchdog(1483):
 - 旧版证书 SHA-256：`A40DA80A59D170CAA950CF15C18C454D47A39B26989D8B640ECD745BA71BF5DC`
 - v1.6 新证书 SHA-256：`4B041D7BA17FCF2121896E136AC906CDE1CF02C8061792584E7CE961439B38D8`
 - v1.6 APK SHA-256：`347C43C0FE72F5C8C3489DA78A0AC4382B6DE0A7DD9D9B10CE65CEAE850C7641`
+- v1.6.1 APK SHA-256：`66E87574D4B212C27DED0A0AA4C2677D8BDA623FCFB9B70813C7B53D4A210475`
 
 请妥善保存 v1.6 发布密钥；后续版本必须继续使用同一密钥，才能覆盖升级。
 

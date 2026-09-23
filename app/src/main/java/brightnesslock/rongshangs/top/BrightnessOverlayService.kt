@@ -20,6 +20,7 @@ import android.widget.Toast
 import androidx.core.content.ContextCompat
 import brightnesslock.rongshangs.top.ui.VerticalBrightnessSlider
 import brightnesslock.rongshangs.top.util.BrightnessManager
+import brightnesslock.rongshangs.top.util.ControlStateStore
 import brightnesslock.rongshangs.top.util.ShellUtils
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
@@ -175,6 +176,7 @@ class BrightnessOverlayService : Service() {
                 if (overlayView != null) {
                     if (success) {
                         lastTargetValue = -1
+                        ControlStateStore.setTakeoverActive(this, false)
                         showToast("已恢复系统控制")
                         closeOverlay()
                     } else {
@@ -223,7 +225,10 @@ class BrightnessOverlayService : Service() {
                 isSyncing.set(false)
             }
 
-            if (finalSuccess) lastTargetValue = target
+            if (finalSuccess) {
+                lastTargetValue = target
+                ControlStateStore.setTakeoverActive(this, true)
+            }
             mainHandler.post {
                 if (overlayView != null) {
                     if (!finalSuccess) {
@@ -262,10 +267,14 @@ class BrightnessOverlayService : Service() {
                 rootStatus.visibility = if (rootAvailable) View.GONE else View.VISIBLE
 
                 if (state == BrightnessManager.BrightnessState.SYSTEM) {
+                    ControlStateStore.setTakeoverActive(this, false)
                     brightnessSlider.setProgress(0)
                     targetVal.text = "—"
                     lastTargetValue = -1
                 } else {
+                    if (state == BrightnessManager.BrightnessState.LOCKED) {
+                        ControlStateStore.setTakeoverActive(this, true)
+                    }
                     brightnessSlider.setProgress(current)
                     targetVal.text = current.toString()
                     lastTargetValue = current
