@@ -2,17 +2,29 @@
 
 小米17 Pro / 17 Pro Max 背屏亮度控制工具。Root 权限下，通过直观的滑块调节背屏亮度，一键锁定或恢复系统控制，支持背屏 AOD 开关。适配 Hyper OS 3 / 4。
 
+> [!IMPORTANT]
+> **v1.6 更换了 APK 发布签名。** 因旧版签名私钥已不可用，v1.6 无法覆盖安装 v1.5 及更早版本。请先在旧版中恢复系统控制，再卸载旧版并安装 v1.6。
+
 ## 📱 应用界面
 
 <img width="1220" height="866" alt="6a8fb84a461bb568155e1327994b6302" src="https://github.com/user-attachments/assets/cf4d712e-9daf-4ef4-957c-b84033193057" />
 
 
-*卡片式界面，左侧状态面板（目标/当前/最大亮度） + 右侧亮度滑块与功能按钮*
+*紧凑悬浮面板：左侧状态信息 + 中间亮度滑块 + 右侧快捷操作。v1.6 已移除冗余标题栏并适配深浅色模式。*
+
+## 🆕 v1.6 更新
+
+- 使用系统悬浮层替代透明 Activity，打开面板不会暂停后方应用
+- 修复控制中心磁贴偶发打不开、通知栏不自动收起的问题
+- 重做紧凑玻璃风格界面，支持系统背景模糊及深色/浅色模式
+- 限制横屏面板宽度，避免界面被过度拉伸
+- Shell 返回真实退出码并增加超时保护，修复失败状态提示
+- 恢复系统控制后停止守护、Root Shell、悬浮 Service 和刷新线程
 
 ## ✨ 核心特性
 
 - **垂直亮度滑块** — 直观的滑块控件，拖动即可实时调节背屏亮度（0 - 4095）
-- **实时亮度监控** — 300ms 刷新间隔，实时显示当前亮度值变化
+- **实时亮度监控** — 500ms 刷新间隔，实时显示当前亮度值变化
 - **渐进式同步** — 松手后自动同步亮度，最多 30 次重试，5 秒超时，渐进式延迟
 - **C 守护进程** — 独立后台进程持续守护亮度，App 被杀也能保持，适配 Hyper OS 4。**极低占用：仅 128KB 内存、0.0% CPU**
 - **一键切换状态** — 软件接管/系统控制，点击按钮即可切换
@@ -22,7 +34,7 @@
 - **轻触外部关闭** — 点击面板外区域即可收起；桌面图标和控制中心入口始终执行“显示”操作
 - **自适应玻璃外观** — Android 12+ 在系统允许时启用跨窗口背景模糊，并自动跟随系统深色/浅色模式
 - **自动 Root 检测** — 启动时验证权限，未 Root 则提示退出
-- **Su 进程复用** — App 运行期间持久保持 su 进程，操作响应更快
+- **Su 进程复用** — 面板打开期间复用 su 进程，面板关闭或恢复系统控制后立即释放
 - **指令合并优化** — 单条命令完成写入+锁定，去除无效 sync，执行更高效
 
 ## 📋 适用环境
@@ -157,7 +169,8 @@ startWatchdog(1483):
 ./gradlew assembleRelease
 ```
 
-输出：`app/build/outputs/apk/release/app-release-unsigned.apk`
+配置本地发布密钥后输出：`app/build/outputs/apk/release/app-release.apk`。
+未配置发布密钥时输出 unsigned APK，需要自行签名后安装。
 
 建议使用 Android Studio 构建，签名后安装。
 
@@ -165,12 +178,21 @@ startWatchdog(1483):
 
 | 版本 | 文件 | 说明 |
 |------|------|------|
+| v1.6 | [GitHub Release](https://github.com/RongShangs/bright/releases/tag/v1.6) | 非阻塞悬浮面板、玻璃外观、磁贴稳定性与资源释放优化 |
 | v1.5 | 见release | C 守护进程，适配 Hyper OS 4 |
 | v1.4 | 见release | 实时亮度监控、渐进式同步循环、指令合并优化 |
 | v1.3 | 见release | Su 进程复用、写入验证重试、AOD 开关、界面重构 |
 | v1.2 | 见release | 新增亮度滑块，全新界面 |
 | v1.1 | 见release | 新增控制中心磁贴 |
 | v1.0 | 见release | 首个发布版本 |
+
+### v1.6 签名说明
+
+- 旧版证书 SHA-256：`A40DA80A59D170CAA950CF15C18C454D47A39B26989D8B640ECD745BA71BF5DC`
+- v1.6 新证书 SHA-256：`4B041D7BA17FCF2121896E136AC906CDE1CF02C8061792584E7CE961439B38D8`
+- v1.6 APK SHA-256：`347C43C0FE72F5C8C3489DA78A0AC4382B6DE0A7DD9D9B10CE65CEAE850C7641`
+
+请妥善保存 v1.6 发布密钥；后续版本必须继续使用同一密钥，才能覆盖升级。
 
 ## 📝 许可
 
@@ -179,4 +201,4 @@ MIT License
 ## 🔗 链接
 
 - 开发者博客：[rongshangs.top](http://rongshangs.top)
-- 官网：[bright.rongshangs.top](http://bright.rongshangs.top)
+- 官网：[bright.rongshangs.top](https://bright.rongshangs.top)
