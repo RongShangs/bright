@@ -9,10 +9,12 @@ import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
 import android.provider.Settings
+import android.util.Log
 import android.view.Gravity
 import android.view.LayoutInflater
 import android.view.MotionEvent
 import android.view.View
+import android.view.ViewGroup
 import android.view.WindowManager
 import android.widget.FrameLayout
 import android.widget.TextView
@@ -30,6 +32,7 @@ class BrightnessOverlayService : Service() {
 
     private lateinit var windowManager: WindowManager
     private var overlayView: View? = null
+    private var activityHost: MainActivity? = null
 
     private val mainHandler = Handler(Looper.getMainLooper())
     private val ioExecutor = Executors.newCachedThreadPool()
@@ -61,42 +64,64 @@ class BrightnessOverlayService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        if (!Settings.canDrawOverlays(this)) {
+        Log.i("BrightnessPanel", "Panel service started; activity host=${OverlayHost.current() != null}")
+        if (intent?.action == ACTION_DISMISS) {
+            closeOverlay()
+            return START_NOT_STICKY
+        }
+        if (OverlayHost.current() == null && !Settings.canDrawOverlays(this)) {
             Toast.makeText(this, "请先授予悬浮窗权限", Toast.LENGTH_SHORT).show()
             stopSelf()
             return START_NOT_STICKY
         }
         // Entry points always mean "show". Treating the tile as a toggle can close an
         // existing panel hidden behind the notification shade and look like a failed open.
-        if (overlayView == null) showOverlay()
+        // Reattach on every explicit open request. Some apps temporarily hide
+        // TYPE_APPLICATION_OVERLAY windows; keeping the old attached view would make
+        // later tile taps look ignored even after the foreground app has changed.
+        overlayView?.let { existing ->
+            mainHandler.removeCallbacks(refreshRunnable)
+            removePanelView(existing)
+            overlayView = null
+        }
+        showOverlay()
         return START_NOT_STICKY
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
 
     private fun showOverlay() {
-        val view = LayoutInflater.from(this).inflate(
+        val card = LayoutInflater.from(this).inflate(
             R.layout.dialog_main,
             FrameLayout(this),
             false
         )
+        val horizontalMargin = dp(16)
+        val panelWidth = min(resources.displayMetrics.widthPixels - horizontalMargin * 2, dp(380))
+        val view = FrameLayout(this).apply {
+            isClickable = true
+            addView(
+                card,
+                FrameLayout.LayoutParams(
+                    panelWidth,
+                    FrameLayout.LayoutParams.WRAP_CONTENT,
+                    Gravity.CENTER
+                )
+            )
+        }
         overlayView = view
         bindViews(view)
         bindActions(view)
 
-        val horizontalMargin = dp(16)
-        val panelWidth = min(resources.displayMetrics.widthPixels - horizontalMargin * 2, dp(380))
-        var windowFlags = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-            WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
-            WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH
+        var windowFlags = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S &&
             windowManager.isCrossWindowBlurEnabled
         ) {
             windowFlags = windowFlags or WindowManager.LayoutParams.FLAG_BLUR_BEHIND
         }
         val params = WindowManager.LayoutParams(
-            panelWidth,
-            WindowManager.LayoutParams.WRAP_CONTENT,
+            WindowManager.LayoutParams.MATCH_PARENT,
+            WindowManager.LayoutParams.MATCH_PARENT,
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
             windowFlags,
             PixelFormat.TRANSLUCENT
@@ -110,17 +135,26 @@ class BrightnessOverlayService : Service() {
             }
         }
 
-        view.setOnTouchListener { touchedView, event ->
-            if (event.action == MotionEvent.ACTION_OUTSIDE) {
-                touchedView.performClick()
+        view.setOnTouchListener { _, event ->
+            if (event.action != MotionEvent.ACTION_DOWN) return@setOnTouchListener false
+            if (event.x < card.left || event.x >= card.right ||
+                event.y < card.top || event.y >= card.bottom) {
+                view.performClick()
                 closeOverlay()
                 true
-            } else {
-                false
-            }
+            } else false
         }
 
-        windowManager.addView(view, params)
+        val host = OverlayHost.current()
+        if (host != null) {
+            activityHost = host
+            host.setContentView(view)
+            Log.i("BrightnessPanel", "Panel attached to Activity")
+        } else {
+            activityHost = null
+            windowManager.addView(view, params)
+            Log.i("BrightnessPanel", "Panel attached as overlay")
+        }
         refreshFullUi()
         mainHandler.post(refreshRunnable)
     }
@@ -351,8 +385,9 @@ class BrightnessOverlayService : Service() {
     private fun closeOverlay() {
         mainHandler.removeCallbacks(refreshRunnable)
         stopSync()
-        overlayView?.let { runCatching { windowManager.removeView(it) } }
+        overlayView?.let { removePanelView(it) }
         overlayView = null
+        sendBroadcast(Intent(ACTION_OVERLAY_CLOSED).setPackage(packageName))
         stopSelf()
     }
 
@@ -369,10 +404,19 @@ class BrightnessOverlayService : Service() {
 
     private fun color(resourceId: Int): Int = ContextCompat.getColor(this, resourceId)
 
+    private fun removePanelView(view: View) {
+        if (activityHost != null) {
+            (view.parent as? ViewGroup)?.removeView(view)
+            activityHost = null
+        } else {
+            runCatching { windowManager.removeViewImmediate(view) }
+        }
+    }
+
     override fun onDestroy() {
         mainHandler.removeCallbacksAndMessages(null)
         stopSync()
-        overlayView?.let { runCatching { windowManager.removeView(it) } }
+        overlayView?.let { removePanelView(it) }
         overlayView = null
         ioExecutor.shutdownNow()
         Thread({ ShellUtils.destroy() }, "root-shell-cleanup").apply {
@@ -385,8 +429,13 @@ class BrightnessOverlayService : Service() {
         private const val REFRESH_INTERVAL_MS = 500L
         private const val SYNC_TIMEOUT_MS = 5_000L
         private const val MAX_SYNC_ATTEMPTS = 30
+        const val ACTION_OVERLAY_CLOSED = "brightnesslock.rongshangs.top.OVERLAY_CLOSED"
+        private const val ACTION_DISMISS = "brightnesslock.rongshangs.top.DISMISS_OVERLAY"
 
         fun createShowIntent(context: Context): Intent =
             Intent(context, BrightnessOverlayService::class.java)
+
+        fun createDismissIntent(context: Context): Intent =
+            Intent(context, BrightnessOverlayService::class.java).setAction(ACTION_DISMISS)
     }
 }
