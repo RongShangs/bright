@@ -16,6 +16,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import java.util.function.Consumer
+import brightnesslock.rongshangs.top.util.IdleProcessExit
 
 class MainActivity : AppCompatActivity() {
     private var keepOverlayHost = false
@@ -39,6 +40,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        IdleProcessExit.acquire(this)
         keepOverlayHost = intent.getBooleanExtra(EXTRA_KEEP_OVERLAY_HOST, false)
         Log.i("BrightnessPanel", "Activity created; QS host=$keepOverlayHost")
         if (keepOverlayHost) {
@@ -122,6 +124,7 @@ class MainActivity : AppCompatActivity() {
         OverlayHost.detach(this)
         if (receiverRegistered) unregisterReceiver(overlayClosedReceiver)
         super.onDestroy()
+        IdleProcessExit.release(applicationContext, this)
     }
 
     companion object { const val EXTRA_KEEP_OVERLAY_HOST = "keep_overlay_host" }

@@ -79,6 +79,7 @@ class BrightnessOverlayService : Service() {
 
     override fun onCreate() {
         super.onCreate()
+        brightnesslock.rongshangs.top.util.IdleProcessExit.acquire(this)
         windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
     }
 
@@ -711,6 +712,7 @@ class BrightnessOverlayService : Service() {
         overlayView = null
         ControlQueue.execute { ShellUtils.destroy() }
         super.onDestroy()
+        brightnesslock.rongshangs.top.util.IdleProcessExit.release(applicationContext, this)
     }
 
     companion object {

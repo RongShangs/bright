@@ -8,8 +8,20 @@ import android.service.quicksettings.Tile
 import android.service.quicksettings.TileService
 import android.util.Log
 import brightnesslock.rongshangs.top.util.ControlStateStore
+import brightnesslock.rongshangs.top.util.IdleProcessExit
 
 class BrightnessTileService : TileService() {
+
+    override fun onCreate() {
+        super.onCreate()
+        // A bound tile is not idle: killing it can trigger repeated SystemUI rebinds.
+        IdleProcessExit.acquire(this)
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        IdleProcessExit.release(applicationContext, this)
+    }
 
     override fun onStartListening() {
         super.onStartListening()
