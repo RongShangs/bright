@@ -1,139 +1,80 @@
 package brightnesslock.rongshangs.top.util
 
-import android.util.Log
-import java.io.BufferedReader
-import java.io.DataOutputStream
-import java.io.IOException
-import java.io.InputStreamReader
-import java.util.concurrent.FutureTask
-import java.util.concurrent.TimeUnit
-import java.util.concurrent.TimeoutException
+import java.io.ByteArrayOutputStream
 import java.util.UUID
 
-object ShellUtils {
-    private const val TAG = "ShellUtils"
-    private var suProcess: Process? = null
-    private var os: DataOutputStream? = null
-    private var isReader: BufferedReader? = null
-    private const val TIMEOUT_MS: Long = 30000
-
-    private fun isAlive(): Boolean {
-        return try {
-            suProcess?.exitValue()
-            false
-        } catch (e: IllegalThreadStateException) {
-            true
-        }
-    }
+/** One shell; only read bytes known to be available, without a blocking reader thread. */
+internal class RootSession(
+    private val processFactory: () -> Process = { ProcessBuilder("su").redirectErrorStream(true).start() },
+    private val authorizationTimeoutMs: Long = 30_000,
+) {
+    private var process: Process? = null
 
     @Synchronized
-    fun execRoot(command: String): ShellResult {
+    fun execute(command: String, timeoutMs: Long = 8_000): ShellUtils.ShellResult {
+        if (Thread.currentThread().isInterrupted) return ShellUtils.ShellResult(-1, "", "Interrupted")
         try {
-            // 1. Ensure su process exists and is alive
-            if (suProcess == null || !isAlive()) {
-                destroy()
-                createSuProcess()
+            val fresh = process?.isAlive != true
+            if (fresh) {
+                close()
+                process = processFactory()
             }
-            
+            val current = checkNotNull(process)
             val marker = "__BRIGHT_END_${UUID.randomUUID()}__"
-            
-            // 2. Try to send command (catch EPIPE)
-            try {
-                writeCommand(command, marker)
-                os!!.flush()
-            } catch (e: IOException) {
-                // Fix: su process died (EPIPE), recreate and retry once
-                Log.w(TAG, "su process died (EPIPE), recreating and retrying...")
-                destroy()
-                createSuProcess()
-                
-                writeCommand(command, marker)
-                os!!.flush()
+            val deadline = System.nanoTime() + (if (fresh) maxOf(timeoutMs, authorizationTimeoutMs) else timeoutMs) * 1_000_000
+            current.outputStream.write(("{\n$command\n} 2>&1\n__bright_status=\$?\nprintf '\\n$marker%s\\n' \"\$__bright_status\"\n").toByteArray(Charsets.UTF_8))
+            current.outputStream.flush()
+            val output = ByteArrayOutputStream()
+            val chunk = ByteArray(4096)
+            while (System.nanoTime() < deadline) {
+                val available = current.inputStream.available()
+                if (available > 0) {
+                    val n = current.inputStream.read(chunk, 0, minOf(available, chunk.size))
+                    if (n < 0) break
+                    output.write(chunk, 0, n)
+                    if (output.size() > 131_072) error("Root output too large")
+                    val text = output.toString("UTF-8")
+                    val start = text.indexOf("\n$marker")
+                    val end = if (start >= 0) text.indexOf('\n', start + 1) else -1
+                    if (end >= 0) {
+                        val code = text.substring(start + 1 + marker.length, end).trim().toIntOrNull() ?: -1
+                        val result = text.substring(0, start).trim()
+                        return ShellUtils.ShellResult(code, result, if (code == 0) "" else result)
+                    }
+                } else {
+                    if (!current.isAlive) break
+                    Thread.sleep(10)
+                }
             }
-
-            // 3. Read merged stdout/stderr until the marker, with a hard timeout.
-            val readFuture = FutureTask {
-                readResult(marker)
-            }
-            Thread(readFuture, "bright-shell-reader").apply {
-                isDaemon = true
-                start()
-            }
-            return try {
-                readFuture.get(TIMEOUT_MS, TimeUnit.MILLISECONDS)
-            } catch (_: TimeoutException) {
-                readFuture.cancel(true)
-                destroyInternal()
-                ShellResult(-1, "", "Command timed out")
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "Command execution failed: $command", e)
-            destroy()
-            return ShellResult(-1, "", e.message ?: "Unknown error")
+            close()
+            return ShellUtils.ShellResult(-1, "", "Root command timed out or shell exited")
+        } catch (_: InterruptedException) {
+            close()
+            Thread.currentThread().interrupt()
+            return ShellUtils.ShellResult(-1, "", "Interrupted")
+        } catch (error: Exception) {
+            close()
+            return ShellUtils.ShellResult(-1, "", error.message ?: "Root command failed")
         }
-    }
-
-    /**
-     * Create su process (for initial use and reconstruction)
-     */
-    private fun createSuProcess() {
-        suProcess = ProcessBuilder("su")
-            .redirectErrorStream(true)
-            .start()
-        os = DataOutputStream(suProcess!!.outputStream)
-        isReader = BufferedReader(InputStreamReader(suProcess!!.inputStream))
-    }
-
-    private fun writeCommand(command: String, marker: String) {
-        os!!.writeBytes("{\n$command\n} 2>&1\n")
-        os!!.writeBytes("__bright_status=\$?\n")
-        os!!.writeBytes("echo $marker\$__bright_status\n")
-    }
-
-    private fun readResult(marker: String): ShellResult {
-        val output = StringBuilder()
-        while (true) {
-            val line = isReader?.readLine()
-                ?: return ShellResult(-1, output.toString().trim(), "Root shell closed")
-            if (line.startsWith(marker)) {
-                val exitCode = line.removePrefix(marker).trim().toIntOrNull() ?: -1
-                val text = output.toString().trim()
-                return ShellResult(exitCode, text, if (exitCode == 0) "" else text)
-            }
-            output.append(line).append('\n')
-        }
-    }
-
-    fun isRootAvailable(): Boolean {
-        return execRoot("id").output.contains("uid=0")
     }
 
     @Synchronized
-    fun destroy() {
-        destroyInternal()
+    fun close() {
+        val old = process ?: return
+        process = null
+        runCatching { old.destroyForcibly() }
+        runCatching { old.outputStream.close() }
+        runCatching { old.inputStream.close() }
+        runCatching { old.errorStream.close() }
     }
+}
 
-    private fun destroyInternal() {
-        try {
-            os?.writeBytes("exit\n")
-            os?.flush()
-            os?.close()
-            isReader?.close()
-            suProcess?.destroy()
-        } catch (e: Exception) {
-            // Ignore
-        } finally {
-            os = null
-            isReader = null
-            suProcess = null
-        }
-    }
-
-    data class ShellResult(
-        val exitCode: Int,
-        val output: String,
-        val error: String
-    ) {
+object ShellUtils {
+    private val session = RootSession()
+    fun execRoot(command: String): ShellResult = session.execute(command)
+    fun isRootAvailable(): Boolean = execRoot("id -u").let { it.isSuccess && it.output.trim() == "0" }
+    fun destroy() = session.close()
+    data class ShellResult(val exitCode: Int, val output: String, val error: String) {
         val isSuccess: Boolean get() = exitCode == 0
     }
 }

@@ -29,7 +29,8 @@ import brightnesslock.rongshangs.top.ui.VerticalBrightnessSlider
 import brightnesslock.rongshangs.top.util.BrightnessManager
 import brightnesslock.rongshangs.top.util.ControlStateStore
 import brightnesslock.rongshangs.top.util.ShellUtils
-import java.util.concurrent.Executors
+import brightnesslock.rongshangs.top.util.ControlQueue
+import brightnesslock.rongshangs.top.util.OperationGeneration
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.math.min
 
@@ -43,14 +44,17 @@ class BrightnessOverlayService : Service() {
     private var isClosing = false
 
     private val mainHandler = Handler(Looper.getMainLooper())
-    private val ioExecutor = Executors.newCachedThreadPool()
+    @Volatile private var destroyed = false
     private val refreshInFlight = AtomicBoolean(false)
     private val isSyncing = AtomicBoolean(false)
 
-    private var syncThread: Thread? = null
+    private val syncGeneration = OperationGeneration()
+    private var nextHealthRead = 0L
+    private var lastWatchdogState: BrightnessManager.WatchdogState? = null
     private var isUserSliding = false
     private var lastTargetValue = -1
     private var activeModeChangeInFlight = false
+    private var restoreInFlight = false
     private var activeModeVersion = 0
     private var activeModeEnabled: Boolean? = null
     private var hintBesideCard = false
@@ -113,6 +117,17 @@ class BrightnessOverlayService : Service() {
 
     override fun onBind(intent: Intent?): IBinder? = null
 
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        if (activityHost == null && overlayView != null && !isClosing) {
+            mainHandler.removeCallbacks(refreshRunnable)
+            cancelPanelAnimation()
+            overlayView?.let(::removePanelView)
+            overlayView = null
+            runCatching { showOverlay() }.onFailure { closeOverlay() }
+        }
+    }
+
     private fun showOverlay() {
         val card = LayoutInflater.from(this).inflate(
             R.layout.dialog_main,
@@ -152,19 +167,11 @@ class BrightnessOverlayService : Service() {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
             addView(TextView(this@BrightnessOverlayService).apply {
-                text = "仅将自动息屏时间修改为无限\n双击背屏或按电源键仍会导致背屏息屏"
-                setTextColor(color(R.color.text_primary))
-                textSize = 12f
-                gravity = Gravity.CENTER
-                includeFontPadding = false
-            })
-            addView(TextView(this@BrightnessOverlayService).apply {
                 text = "背屏将保持活跃不会主动休眠或者进入AOD\n耗电与烧屏风险增加"
                 setTextColor(color(R.color.hint_warning))
                 textSize = 12f
                 gravity = Gravity.CENTER
                 includeFontPadding = false
-                setPadding(0, dp(6), 0, 0)
             })
             visibility = View.GONE
             if (!sideBySide) translationY = dp(160).toFloat()
@@ -303,7 +310,7 @@ class BrightnessOverlayService : Service() {
     private fun toggleAod() {
         executeIo {
             val currentAod = BrightnessManager.isRearAodEnabled()
-            val success = BrightnessManager.setRearAodEnabled(!currentAod)
+            val success = currentAod != null && BrightnessManager.setRearAodEnabled(!currentAod)
             mainHandler.post {
                 if (overlayView != null) {
                     if (success) refreshFullUi() else showToast("AOD 设置失败")
@@ -313,15 +320,15 @@ class BrightnessOverlayService : Service() {
     }
 
     private fun setActiveMode(enabled: Boolean) {
-        if (activeModeChangeInFlight) return
+        if (activeModeChangeInFlight || restoreInFlight) return
         activeModeChangeInFlight = true
         activeModeVersion++
         activeModeButton.isEnabled = false
         activeModeText.text = "永不息屏\n设置中"
         val panel = overlayView
         executeIo {
-            val success = BrightnessManager.setActiveMode(enabled)
-            val actual = BrightnessManager.getActiveModeState()
+            val success = BrightnessManager.setActiveMode(applicationContext, enabled)
+              val actual = BrightnessManager.getActiveModeState()
             mainHandler.post {
                 activeModeVersion++
                 activeModeChangeInFlight = false
@@ -334,24 +341,30 @@ class BrightnessOverlayService : Service() {
                 if (success && !enabled) {
                     showToast("已恢复正常息屏时间")
                 } else if (!success) {
-                    showToast("息屏时间设置失败，请检查 Root 授权")
+                    showToast(if (enabled) "背屏守护启动失败，请检查 Root 与设备支持" else "息屏时间设置失败")
                 }
             }
         }
     }
 
     private fun restoreSystemControl() {
+        if (restoreInFlight) return
         if (activeModeChangeInFlight) {
             showToast("请等待息屏时间设置完成")
             return
         }
+        restoreInFlight = true
+        brightnessSlider.isEnabled = false
         stopSync()
         executeIo {
-            val success = BrightnessManager.restoreSystemControl()
+            val success = BrightnessManager.restoreSystemControl(applicationContext)
             mainHandler.post {
+                restoreInFlight = false
+                if (overlayView != null) brightnessSlider.isEnabled = true
                 if (success) {
                     ControlStateStore.setTakeoverActive(this, false)
                     ControlStateStore.setActiveModeEnabled(this, false)
+                    ControlStateStore.setTargetBrightness(this, -1)
                 }
                 if (overlayView != null) {
                     if (success) {
@@ -368,28 +381,34 @@ class BrightnessOverlayService : Service() {
     }
 
     private fun startSyncLoop(target: Int) {
+        if (restoreInFlight) return
         stopSync()
+        val ticket = syncGeneration.next()
+        val panel = overlayView
         isSyncing.set(true)
         updateStatusLabels()
 
-        syncThread = Thread({
-            val startTime = System.currentTimeMillis()
+        executeIo {
+            if (!syncGeneration.isCurrent(ticket)) return@executeIo
+            val startTime = android.os.SystemClock.elapsedRealtime()
             var attempts = 0
             var finalSuccess = false
+            var activeGuardFailed = false
 
             try {
-                while (isSyncing.get() && attempts < MAX_SYNC_ATTEMPTS &&
-                    System.currentTimeMillis() - startTime <= SYNC_TIMEOUT_MS
+                while (syncGeneration.isCurrent(ticket) && attempts < MAX_SYNC_ATTEMPTS &&
+                    android.os.SystemClock.elapsedRealtime() - startTime <= SYNC_TIMEOUT_MS
                 ) {
                     attempts++
-                    val writeSucceeded = BrightnessManager.lockBrightnessOnce(target)
-                    if (writeSucceeded && BrightnessManager.getCurrentBrightness() == target) {
-                        Thread.sleep(50)
-                        if (BrightnessManager.getCurrentBrightness() == target) {
-                            finalSuccess = BrightnessManager.startWatchdog(applicationContext, target)
-                            break
-                        }
+                    val keepActive = BrightnessManager.getActiveModeState()
+                    if (!syncGeneration.isCurrent(ticket) || keepActive == null) break
+                    finalSuccess = BrightnessManager.startWatchdog(applicationContext, target, keepActive)
+                    if (!syncGeneration.isCurrent(ticket)) break
+                    if (!finalSuccess && keepActive) {
+                        activeGuardFailed = true
+                        finalSuccess = BrightnessManager.startWatchdog(applicationContext, target, false)
                     }
+                    if (finalSuccess || !syncGeneration.isCurrent(ticket)) break
                     Thread.sleep(
                         when {
                             attempts <= 10 -> 100L
@@ -401,17 +420,21 @@ class BrightnessOverlayService : Service() {
             } catch (_: InterruptedException) {
                 Thread.currentThread().interrupt()
             } finally {
-                isSyncing.set(false)
+                if (syncGeneration.isCurrent(ticket)) isSyncing.set(false)
             }
 
+            if (!syncGeneration.isCurrent(ticket)) return@executeIo
             if (finalSuccess) {
-                lastTargetValue = target
                 ControlStateStore.setTakeoverActive(this, true)
+                ControlStateStore.setTargetBrightness(this, target)
             }
+            val rootAvailable = if (finalSuccess) true else ShellUtils.isRootAvailable()
             mainHandler.post {
-                if (overlayView != null) {
+                if (overlayView === panel && panel != null && syncGeneration.isCurrent(ticket)) {
+                    if (finalSuccess) lastTargetValue = target
+                    if (activeGuardFailed) showToast("亮度守护已恢复，但背屏唤醒守护未启动")
                     if (!finalSuccess) {
-                        val message = if (ShellUtils.isRootAvailable()) {
+                        val message = if (rootAvailable) {
                             "亮度被系统持续覆盖，请重试"
                         } else {
                             "Root 未授权"
@@ -421,32 +444,38 @@ class BrightnessOverlayService : Service() {
                     updateStatusLabels()
                 }
             }
-        }, "brightness-sync").also { it.start() }
+        }
     }
 
     private fun stopSync() {
+        syncGeneration.cancel()
         isSyncing.set(false)
-        syncThread?.interrupt()
-        syncThread = null
     }
 
     private fun refreshFullUi() {
         val activeModeVersionAtStart = activeModeVersion
+        val panel = overlayView
+        val ticket = syncGeneration.current()
         executeIo {
+            if (overlayView !== panel || destroyed) return@executeIo
             val max = BrightnessManager.getMaxBrightness()
             val current = BrightnessManager.getCurrentBrightness()
             val state = BrightnessManager.getCurrentState()
             val aodEnabled = BrightnessManager.isRearAodEnabled()
             val activeModeEnabled = BrightnessManager.getActiveModeState()
+            val activeModeWatchdogReady = BrightnessManager.ensureActiveModeWatchdog(applicationContext)
+            val watchdog = BrightnessManager.watchdogState(applicationContext)
             val rootAvailable = ShellUtils.isRootAvailable()
 
             mainHandler.post {
-                if (overlayView == null) return@post
-                brightnessSlider.setMax(max)
-                maxVal.text = max.toString()
-                currentVal.text = current.toString()
+                if (overlayView !== panel || panel == null || destroyed) return@post
+                lastWatchdogState = watchdog
+                if (max > 0) brightnessSlider.setMax(max)
+                maxVal.text = if (max > 0) max.toString() else "—"
+                currentVal.text = if (current >= 0) current.toString() else "—"
                 rootStatus.visibility = if (rootAvailable) View.GONE else View.VISIBLE
 
+                if (syncGeneration.isCurrent(ticket) && !isUserSliding && !isSyncing.get()) {
                 if (state == BrightnessManager.BrightnessState.SYSTEM) {
                     ControlStateStore.setTakeoverActive(this, false)
                     brightnessSlider.setProgress(0)
@@ -454,17 +483,26 @@ class BrightnessOverlayService : Service() {
                     lastTargetValue = -1
                 } else {
                     if (state == BrightnessManager.BrightnessState.LOCKED) {
-                        ControlStateStore.setTakeoverActive(this, true)
+                        ControlStateStore.setTakeoverActive(this, watchdog?.let { it.running && it.target >= 10 && it.brightnessHealthy } == true)
                     }
-                    brightnessSlider.setProgress(current)
-                    targetVal.text = current.toString()
-                    lastTargetValue = current
+                    val target = watchdog?.target?.takeIf { it >= 10 }
+                        ?: ControlStateStore.getTargetBrightness(this).takeIf { it >= 10 }
+                        ?: current.takeIf { it >= 10 }
+                    if (target != null) brightnessSlider.setProgress(target)
+                    targetVal.text = target?.toString() ?: "—"
+                    lastTargetValue = target ?: -1
+                }
                 }
 
-                aodText.text = if (aodEnabled) "AOD\n已开启" else "AOD\n已关闭"
+                aodText.text = when (aodEnabled) { true -> "AOD\n已开启"; false -> "AOD\n已关闭"; null -> "AOD\n读取失败" }
                 aodText.setTextColor(color(R.color.text_primary))
                 if (activeModeVersionAtStart == activeModeVersion && !activeModeChangeInFlight) {
                     renderActiveMode(activeModeEnabled)
+                    if (activeModeEnabled == true && !activeModeWatchdogReady) {
+                        activeModeText.text = "永不息屏\n守护异常"
+                        ControlStateStore.setActiveModeEnabled(this, false)
+                        showToast("背屏唤醒守护未启动，请检查 Root 与设备支持")
+                    }
                 }
                 updateStatusLabels(rootAvailable, state)
             }
@@ -473,11 +511,29 @@ class BrightnessOverlayService : Service() {
 
     private fun updateCurrentBrightness() {
         if (!refreshInFlight.compareAndSet(false, true)) return
+        val panel = overlayView
         executeIo {
+            if (destroyed || overlayView !== panel) { refreshInFlight.set(false); return@executeIo }
             val current = BrightnessManager.getCurrentBrightness()
+            val now = android.os.SystemClock.elapsedRealtime()
+            val checkedHealth = now >= nextHealthRead
+            val health = if (checkedHealth) {
+                nextHealthRead = now + 5000
+                BrightnessManager.watchdogState(applicationContext)
+            } else null
             mainHandler.post {
-                if (overlayView != null) currentVal.text = current.toString()
                 refreshInFlight.set(false)
+                if (overlayView !== panel || panel == null || destroyed) return@post
+                currentVal.text = if (current >= 0) current.toString() else "—"
+                if (checkedHealth && !isSyncing.get() && !activeModeChangeInFlight) {
+                    lastWatchdogState = health
+                    val brightnessHealthy = health?.let { it.running && it.target >= 10 && it.brightnessHealthy } == true
+                    val activeHealthy = health?.let { it.running && it.active && it.activeHealthy } == true
+                    ControlStateStore.setTakeoverActive(this, brightnessHealthy)
+                    ControlStateStore.setActiveModeEnabled(this, activeHealthy)
+                    if (lastTargetValue >= 10) setStatus(if (brightnessHealthy) "亮度已接管" else "亮度守护异常", color(if (brightnessHealthy) R.color.success else R.color.error))
+                    if (activeModeEnabled == true) activeModeText.text = if (activeHealthy) "永不息屏\n已开启" else "永不息屏\n守护异常"
+                }
             }
         }
     }
@@ -493,7 +549,8 @@ class BrightnessOverlayService : Service() {
         executeIo {
             val rootAvailable = ShellUtils.isRootAvailable()
             val state = BrightnessManager.getCurrentState()
-            mainHandler.post { renderStatus(rootAvailable, state) }
+            val health = BrightnessManager.watchdogState(applicationContext)
+            mainHandler.post { lastWatchdogState = health; renderStatus(rootAvailable, state) }
         }
     }
 
@@ -504,6 +561,7 @@ class BrightnessOverlayService : Service() {
         when {
             isSyncing.get() -> setStatus("正在同步", color(R.color.accent))
             !rootAvailable -> setStatus("等待 Root 授权", color(R.color.error))
+            state == BrightnessManager.BrightnessState.UNKNOWN -> setStatus("状态读取失败", color(R.color.error))
             lastTargetValue == -1 || state == BrightnessManager.BrightnessState.SYSTEM -> {
                 setStatus("系统控制中", color(R.color.text_secondary))
                 if (!isUserSliding) {
@@ -512,6 +570,8 @@ class BrightnessOverlayService : Service() {
                     lastTargetValue = -1
                 }
             }
+            lastWatchdogState?.let { it.running && it.target >= 10 && it.brightnessHealthy } != true ->
+                setStatus("亮度守护异常", color(R.color.error))
             else -> setStatus("亮度已接管", color(R.color.success))
         }
     }
@@ -623,8 +683,7 @@ class BrightnessOverlayService : Service() {
     }
 
     private fun executeIo(block: () -> Unit) {
-        if (ioExecutor.isShutdown) return
-        runCatching { ioExecutor.execute(block) }
+        if (!destroyed) ControlQueue.execute(block)
     }
 
     private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
@@ -642,6 +701,7 @@ class BrightnessOverlayService : Service() {
     }
 
     override fun onDestroy() {
+        destroyed = true
         mainHandler.removeCallbacksAndMessages(null)
         stopSync()
         cancelPanelAnimation()
@@ -649,10 +709,7 @@ class BrightnessOverlayService : Service() {
             removePanelView(it)
         }
         overlayView = null
-        ioExecutor.shutdownNow()
-        Thread({ ShellUtils.destroy() }, "root-shell-cleanup").apply {
-            start()
-        }
+        ControlQueue.execute { ShellUtils.destroy() }
         super.onDestroy()
     }
 

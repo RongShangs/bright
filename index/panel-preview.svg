@@ -1,0 +1,66 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="640" viewBox="0 0 1200 640" role="img" aria-labelledby="title desc">
+  <title id="title">背屏激发控制面板界面示意图</title>
+  <desc id="desc">浅色玻璃面板，左侧亮度状态与数值，中间垂直亮度滑块，右侧依次为 AOD、永不息屏和恢复系统控制按钮。</desc>
+  <defs>
+    <linearGradient id="scene" x2="1" y2="1">
+      <stop stop-color="#222a39"/>
+      <stop offset=".52" stop-color="#425d71"/>
+      <stop offset="1" stop-color="#2d263f"/>
+    </linearGradient>
+    <linearGradient id="glass" x2=".9" y2="1">
+      <stop stop-color="#ffffff" stop-opacity=".94"/>
+      <stop offset="1" stop-color="#f2f4f5" stop-opacity=".87"/>
+    </linearGradient>
+    <linearGradient id="slider" x2="0" y2="1">
+      <stop stop-color="#ffd274"/>
+      <stop offset="1" stop-color="#ffb52e"/>
+    </linearGradient>
+    <filter id="blur"><feGaussianBlur stdDeviation="48"/></filter>
+    <filter id="shadow" x="-.3" y="-.5" width="1.6" height="2"><feDropShadow dx="0" dy="22" stdDeviation="26" flood-color="#101b29" flood-opacity=".3"/></filter>
+    <clipPath id="sliderClip"><rect x="659" y="145" width="163" height="350" rx="45"/></clipPath>
+  </defs>
+  <rect width="1200" height="640" fill="url(#scene)"/>
+  <g opacity=".5" filter="url(#blur)">
+    <circle cx="205" cy="68" r="170" fill="#f6a54c"/>
+    <circle cx="1003" cy="470" r="205" fill="#90bdd1"/>
+    <circle cx="694" cy="-40" r="200" fill="#f6dad6"/>
+  </g>
+  <g opacity=".35" fill="none" stroke="#fff">
+    <rect x="52" y="43" width="1096" height="554" rx="46" stroke-opacity=".36"/>
+    <path d="M104 79h167M929 563h148" stroke-width="2" stroke-opacity=".58"/>
+  </g>
+  <g filter="url(#shadow)">
+    <rect x="90" y="104" width="1020" height="432" rx="54" fill="url(#glass)" stroke="#fff" stroke-opacity=".8" stroke-width="2"/>
+  </g>
+  <rect x="116" y="130" width="515" height="380" rx="40" fill="#667078" fill-opacity=".07" stroke="#65717b" stroke-opacity=".12"/>
+  <text x="154" y="185" fill="#7c7f86" font-family="Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="22" font-weight="700">亮度状态</text>
+  <text x="476" y="185" fill="#23885e" font-family="Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="22" font-weight="700">亮度已接管</text>
+  <g font-family="Noto Sans CJK SC, Microsoft YaHei, sans-serif">
+    <text x="154" y="263" fill="#666970" font-size="24">目标</text>
+    <text x="558" y="263" text-anchor="end" fill="#1c1c1e" font-size="31" font-weight="700">2940</text>
+    <text x="154" y="328" fill="#666970" font-size="24">当前</text>
+    <text x="558" y="328" text-anchor="end" fill="#d58c00" font-size="31" font-weight="700">2940</text>
+    <text x="154" y="393" fill="#666970" font-size="24">上限</text>
+    <text x="558" y="393" text-anchor="end" fill="#3a3b3f" font-size="26" font-weight="700">4095</text>
+    <text x="154" y="476" fill="#a16a00" font-size="19" font-weight="600">发布页</text>
+    <circle cx="240" cy="469" r="2" fill="#9ca0a4"/>
+    <text x="258" y="476" fill="#666970" font-size="19">酷安</text>
+  </g>
+  <rect x="659" y="145" width="163" height="350" rx="45" fill="#7f8587" fill-opacity=".12" stroke="#5e6567" stroke-opacity=".15"/>
+  <g clip-path="url(#sliderClip)"><rect x="659" y="245" width="163" height="250" fill="url(#slider)"/></g>
+  <g transform="translate(740 390)" fill="none" stroke="#5b4314" stroke-linecap="round" stroke-width="5">
+    <circle r="16" fill="#5b4314" stroke="none"/>
+    <path d="M0-36v-7M0 36v7M-36 0h-7M36 0h7M-26-26l-5-5M26 26l5 5M26-26l5-5M-26 26l-5 5"/>
+  </g>
+  <rect x="850" y="145" width="215" height="110" rx="30" fill="#7f8587" fill-opacity=".1" stroke="#5e6567" stroke-opacity=".12"/>
+  <rect x="850" y="265" width="215" height="110" rx="30" fill="#e25436" fill-opacity=".08" stroke="#d94d36" stroke-opacity=".17"/>
+  <rect x="850" y="385" width="215" height="110" rx="30" fill="#23885e" fill-opacity=".08" stroke="#23885e" stroke-opacity=".17"/>
+  <g font-family="Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="28" font-weight="700" text-anchor="middle">
+    <text x="958" y="191" fill="#1c1c1e">AOD</text>
+    <text x="958" y="230" fill="#1c1c1e">已开启</text>
+    <text x="958" y="311" fill="#aa3f2c" font-size="23">永不息屏</text>
+    <text x="958" y="350" fill="#aa3f2c">已关闭</text>
+    <text x="958" y="431" fill="#23885e">恢复</text>
+    <text x="958" y="470" fill="#23885e">系统控制</text>
+  </g>
+</svg>

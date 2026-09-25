@@ -1,142 +1,219 @@
 package brightnesslock.rongshangs.top.util
 
 import android.content.Context
-import android.util.Log
 import java.io.File
+import java.security.MessageDigest
+import java.util.UUID
 
 object BrightnessManager {
-    private const val TAG = "BrightnessManager"
     private const val BRIGHTNESS_PATH = "/sys/class/backlight/panel1-backlight/brightness"
-    private const val MAX_BRIGHTNESS_PATH = "/sys/class/backlight/panel1-backlight/max_brightness"
-    private const val KEY_SUBSCREEN_DISPLAY_TIME = "subscreen_display_time"
-    private const val DISPLAY_TIME_DEFAULT = "10000"
-    private const val DISPLAY_TIME_ACTIVE = "2147483647"
+    private const val MAX_PATH = "/sys/class/backlight/panel1-backlight/max_brightness"
+    private const val TIME_KEY = "subscreen_display_time"
+    private const val DEFAULT_TIME = "10000"
+    private const val ACTIVE_TIME = "2147483647"
+    private const val ROOT_DIR = "/data/adb/bright"
+    const val WATCHDOG_BIN = "$ROOT_DIR/bright_watchdog"
+    private var installed = false
+    private val rootReadPaths = HashSet<String>()
 
-    const val WATCHDOG_BIN = "/data/local/tmp/bright_watchdog"
-    private const val WATCHDOG_PID = "/data/local/tmp/bright_watchdog.pid"
+    enum class BrightnessState { LOCKED, SYSTEM, UNKNOWN }
+    data class WatchdogState(val running: Boolean, val target: Int = -1, val active: Boolean = false,
+                             val activeHealthy: Boolean = true, val brightnessHealthy: Boolean = true)
 
-    enum class BrightnessState {
-        LOCKED, SYSTEM, UNKNOWN
-    }
-
-    fun getCurrentBrightness(): Int {
-        return try {
-            val result = ShellUtils.execRoot("cat $BRIGHTNESS_PATH")
-            result.output.trim().toIntOrNull() ?: 500
-        } catch (e: Exception) {
-            Log.e(TAG, "获取亮度失败", e)
-            500
+    @Synchronized
+    private fun readNumber(path: String): Int? {
+        // Readable sysfs needs no fork or Root command for the 500ms panel refresh.
+        if (path !in rootReadPaths) {
+            val direct = runCatching { File(path).readText().trim().toIntOrNull() }
+            direct.getOrNull()?.let { return it }
+            if (direct.isFailure) rootReadPaths.add(path)
         }
+        val result = ShellUtils.execRoot("IFS= read -r bright_value < '$path' && printf '%s\\n' \"\$bright_value\"")
+        return if (result.isSuccess) result.output.trim().toIntOrNull() else null
     }
+    fun getCurrentBrightness(): Int = readNumber(BRIGHTNESS_PATH) ?: -1
+    fun getMaxBrightness(): Int = readNumber(MAX_PATH) ?: -1
 
-    fun getMaxBrightness(): Int {
-        return try {
-            val result = ShellUtils.execRoot("cat $MAX_BRIGHTNESS_PATH")
-            result.output.trim().toIntOrNull() ?: 4095
-        } catch (e: Exception) {
-            Log.e(TAG, "获取最大亮度失败", e)
-            4095
-        }
-    }
-
-    fun lockBrightnessOnce(targetValue: Int): Boolean {
-        val cmd = "chmod 644 $BRIGHTNESS_PATH && echo $targetValue > $BRIGHTNESS_PATH && chmod 444 $BRIGHTNESS_PATH"
-        return ShellUtils.execRoot(cmd).isSuccess
-    }
-
-    /**
-     * 启动C语言守护进程
-     */
-    fun startWatchdog(context: Context, target: Int): Boolean {
-        stopWatchdog()
-        return try {
-            val localBinary = File(context.filesDir, "watchdog_c")
-            context.assets.open("watchdog_c").use { input ->
-                localBinary.outputStream().use { output -> input.copyTo(output) }
+    private fun prepare(context: Context): Boolean {
+        if (installed) return true
+        val secureDirectory = ShellUtils.execRoot("""
+            test -d /data/adb && test ! -L /data/adb &&
+            test ! -L '$ROOT_DIR' &&
+            { test -d '$ROOT_DIR' || mkdir -m 700 '$ROOT_DIR'; } &&
+            test "${'$'}(stat -c %u '$ROOT_DIR')" = 0 && chmod 700 '$ROOT_DIR'
+        """.trimIndent()).isSuccess
+        if (!secureDirectory || !stopLegacy()) return false
+        return runCatching {
+            val local = File(context.filesDir, "watchdog_c")
+            context.assets.open("watchdog_c").use { input -> local.outputStream().use { output -> input.copyTo(output) } }
+            val hash = MessageDigest.getInstance("SHA-256").digest(local.readBytes()).joinToString("") { "%02x".format(it) }
+            val existing = ShellUtils.execRoot("test ! -L '$WATCHDOG_BIN' && sha256sum '$WATCHDOG_BIN'")
+            if (!existing.isSuccess || existing.output.substringBefore(' ') != hash) {
+                // Existing trusted installation must acknowledge STOP before replacement.
+                if (existing.isSuccess && !ShellUtils.execRoot("'$WATCHDOG_BIN' --stop").isSuccess) return false
+                val staging = "$ROOT_DIR/install-${UUID.randomUUID()}"
+                val result = ShellUtils.execRoot("cp '${local.absolutePath}' '$staging' && chmod 700 '$staging' && mv -f '$staging' '$WATCHDOG_BIN'")
+                if (!result.isSuccess) return false
             }
-            localBinary.setExecutable(true)
+            installed = true
+            true
+        }.getOrDefault(false)
+    }
 
-            val install = ShellUtils.execRoot(
-                "cp '${localBinary.absolutePath}' $WATCHDOG_BIN && chmod 755 $WATCHDOG_BIN"
-            )
-            if (!install.isSuccess) return false
+    /** Migration only: never read the old untrusted PID file or execute the old binary. */
+    private fun stopLegacy(): Boolean = ShellUtils.execRoot("""
+        for bright_pid in ${'$'}(pidof bright_watchdog 2>/dev/null); do
+            case "${'$'}(readlink /proc/${'$'}bright_pid/exe)" in
+              /data/local/tmp/bright_watchdog|'/data/local/tmp/bright_watchdog (deleted)')
+                kill -TERM "${'$'}bright_pid" 2>/dev/null
+                bright_tries=0
+                while test "${'$'}bright_tries" -lt 20 && test "${'$'}(readlink /proc/${'$'}bright_pid/exe)" = /data/local/tmp/bright_watchdog; do
+                    sleep 0.05; bright_tries=${'$'}((bright_tries + 1))
+                done
+                case "${'$'}(readlink /proc/${'$'}bright_pid/exe)" in
+                  /data/local/tmp/bright_watchdog|'/data/local/tmp/bright_watchdog (deleted)')
+                    kill -KILL "${'$'}bright_pid" 2>/dev/null; sleep 0.05 ;;
+                esac ;;
+            esac
+        done
+        for bright_pid in ${'$'}(pidof bright_watchdog 2>/dev/null); do
+            case "${'$'}(readlink /proc/${'$'}bright_pid/exe)" in
+              /data/local/tmp/bright_watchdog|'/data/local/tmp/bright_watchdog (deleted)') exit 1 ;;
+            esac
+        done
+        true
+    """.trimIndent()).isSuccess
 
-            val started = ShellUtils.execRoot(
-                "nohup $WATCHDOG_BIN $target > /dev/null 2>&1 &"
-            ).isSuccess
-            if (started) Log.d(TAG, "C Watchdog started, target=$target")
-            started
-        } catch (e: Exception) {
-            Log.e(TAG, "启动守护进程失败", e)
-            false
+    internal fun parseWatchdogState(text: String): WatchdogState? {
+        if (text.trim() == "STOPPED") return WatchdogState(false)
+        val parts = text.trim().split(Regex("\\s+"))
+        if (parts.size != 5 || parts[0] != "OK" || parts.drop(2).any { it != "0" && it != "1" }) return null
+        val target = parts[1].toIntOrNull() ?: return null
+        if (target != -1 && target !in 10..65535) return null
+        return WatchdogState(true, target, parts[2] == "1", parts[3] == "1", parts[4] == "1")
+    }
+
+    @Synchronized
+    fun watchdogState(context: Context): WatchdogState? {
+        if (!prepare(context)) return null
+        val result = ShellUtils.execRoot("'$WATCHDOG_BIN' --status")
+        return if (result.isSuccess) parseWatchdogState(result.output) else null
+    }
+
+    @Synchronized
+    fun startWatchdog(context: Context, target: Int, keepActive: Boolean): Boolean {
+        if (target != -1 && target !in 10..65535) return false
+        if (!prepare(context)) return false
+        val current = watchdogState(context) ?: return false
+        if (target == -1 && !keepActive) return stopWatchdog(context)
+        if (!current.running) {
+            if (!ShellUtils.execRoot("nohup '$WATCHDOG_BIN' --serve </dev/null >/dev/null 2>&1 &").isSuccess) return false
+            var ready = false
+            repeat(15) {
+                if (!ready) {
+                    Thread.sleep(20)
+                    ready = watchdogState(context)?.running == true
+                }
+            }
+            if (!ready) return false
+        }
+        val result = ShellUtils.execRoot("'$WATCHDOG_BIN' --set $target ${if (keepActive) 1 else 0}")
+        val state = if (result.isSuccess) parseWatchdogState(result.output) else null
+        return state?.let { it.target == target && it.active == keepActive && it.brightnessHealthy && (!keepActive || it.activeHealthy) } == true
+    }
+
+    @Synchronized
+    fun stopWatchdog(context: Context): Boolean = prepare(context) && ShellUtils.execRoot("'$WATCHDOG_BIN' --stop").isSuccess
+
+    private fun targetFor(context: Context, state: WatchdogState): Int? {
+        if (state.running && state.target >= 10) return state.target
+        return when (getCurrentState()) {
+            BrightnessState.SYSTEM -> -1
+            BrightnessState.UNKNOWN -> null
+            BrightnessState.LOCKED -> ControlStateStore.getTargetBrightness(context).takeIf { it >= 10 }
+                ?: getCurrentBrightness().takeIf { it >= 10 }
         }
     }
 
-    /**
-     * 停止C语言守护进程
-     */
-    fun stopWatchdog() {
-        ShellUtils.execRoot("if [ -f $WATCHDOG_PID ]; then kill ${'$'}(cat $WATCHDOG_PID) 2>/dev/null; rm -f $WATCHDOG_PID; fi")
-        ShellUtils.execRoot("pkill -x bright_watchdog 2>/dev/null || true")
-        Log.d(TAG, "Watchdog stopped")
+    @Synchronized
+    fun ensureActiveModeWatchdog(context: Context): Boolean {
+        val mode = readActiveModeTimeout() ?: return false
+        val state = watchdogState(context) ?: return false
+        val target = targetFor(context, state) ?: return false
+        val active = mode == ACTIVE_TIME
+        if (state.running && state.target == target && state.active == active && state.brightnessHealthy && (!active || state.activeHealthy)) return true
+        // Faulted native wake monitoring already retries with backoff. Don't defeat that backoff.
+        if (state.running && state.active == active && active && !state.activeHealthy) return false
+        return startWatchdog(context, target, active)
     }
 
-    fun restoreSystemControl(): Boolean {
-        stopWatchdog()
-        val brightnessRestored = ShellUtils.execRoot(
-            "chmod 644 $BRIGHTNESS_PATH && echo 500 > $BRIGHTNESS_PATH"
-        ).isSuccess
-        val activeModeDisabled = setActiveMode(false)
-        ShellUtils.destroy()
-        return brightnessRestored && activeModeDisabled
+    @Synchronized
+    fun restoreSystemControl(context: Context): Boolean {
+        // Never write restored brightness while a previous writer can still run.
+        if (!stopWatchdog(context)) return false
+        val brightness = ShellUtils.execRoot("chmod 644 '$BRIGHTNESS_PATH' && printf '500' > '$BRIGHTNESS_PATH'").isSuccess
+        val timeout = setTimeout(false)
+        if (brightness && timeout) {
+            ControlStateStore.setTakeoverActive(context, false)
+            ControlStateStore.setActiveModeEnabled(context, false)
+            ControlStateStore.setTargetBrightness(context, -1)
+        }
+        return brightness && timeout
     }
 
     fun getCurrentState(): BrightnessState {
-        val result = ShellUtils.execRoot("ls -l $BRIGHTNESS_PATH")
+        val result = ShellUtils.execRoot("stat -c %a '$BRIGHTNESS_PATH'")
         if (!result.isSuccess) return BrightnessState.UNKNOWN
-        val output = result.output.trim()
-        return when {
-            output.startsWith("-r--r--r--") -> BrightnessState.LOCKED
-            output.startsWith("-rw-r--r--") -> BrightnessState.SYSTEM
-            else -> BrightnessState.UNKNOWN
-        }
+        val permissions = result.output.trim().toIntOrNull(8) ?: return BrightnessState.UNKNOWN
+        return if (permissions and 128 != 0) BrightnessState.SYSTEM else BrightnessState.LOCKED
     }
 
-    fun isRearAodEnabled(): Boolean {
-        return ShellUtils.execRoot("settings get secure rear_doze_always_on").output.trim() == "1"
+    fun isRearAodEnabled(): Boolean? {
+        val result = ShellUtils.execRoot("settings get secure rear_doze_always_on")
+        return if (!result.isSuccess) null else when (result.output.trim()) { "1" -> true; "0", "null" -> false; else -> null }
     }
 
+    @Synchronized
     fun setRearAodEnabled(enabled: Boolean): Boolean {
-        val value = if (enabled) "1" else "0"
-        val success = ShellUtils.execRoot("settings put secure rear_doze_always_on $value").isSuccess
-        if (enabled && success) {
-            try { Thread.sleep(50) } catch (e: Exception) {}
-            ShellUtils.execRoot("input -d 1 keyevent KEYCODE_WAKEUP")
-        }
-        return success
+        val success = ShellUtils.execRoot("settings put secure rear_doze_always_on ${if (enabled) 1 else 0}").isSuccess
+        if (enabled && success) ShellUtils.execRoot("input -d 1 keyevent KEYCODE_WAKEUP")
+        return success && isRearAodEnabled() == enabled
     }
 
-    /** Sets the rear display timeout. This setting is independent of brightness and AOD. */
-    fun setActiveMode(enabled: Boolean): Boolean {
-        val value = if (enabled) DISPLAY_TIME_ACTIVE else DISPLAY_TIME_DEFAULT
-        val saved = ShellUtils.execRoot(
-            "settings put system $KEY_SUBSCREEN_DISPLAY_TIME $value"
-        ).isSuccess
-        if (!saved || readActiveModeTimeout() != value) return false
-
-        if (enabled) {
-            val wake = ShellUtils.execRoot("input -d 1 keyevent KEYCODE_WAKEUP")
-            if (!wake.isSuccess) Log.w(TAG, "常亮超时已保存，但立即唤醒背屏失败: ${wake.error}")
-        }
-        return true
+    private fun setTimeout(enabled: Boolean): Boolean {
+        val value = if (enabled) ACTIVE_TIME else DEFAULT_TIME
+        val write = ShellUtils.execRoot("settings put system $TIME_KEY $value").isSuccess
+        return write && readActiveModeTimeout() == value
     }
 
-    /** Null means the Root read failed; do not falsely display the mode as disabled. */
-    fun getActiveModeState(): Boolean? =
-        readActiveModeTimeout()?.let { it == DISPLAY_TIME_ACTIVE }
+    @Synchronized
+    fun setActiveMode(context: Context, enabled: Boolean): Boolean {
+        val before = watchdogState(context) ?: return false
+        val target = targetFor(context, before) ?: return false
+        if (!enabled) {
+            // Stop wake activity BEFORE touching settings; readback failure cannot leave it enabled.
+            val disabled = startWatchdog(context, target, false)
+            val stopped = disabled || stopWatchdog(context)
+            val saved = setTimeout(false)
+            if (stopped) ControlStateStore.setActiveModeEnabled(context, false)
+            return stopped && saved && disabled
+        }
+        if (setTimeout(true) && startWatchdog(context, target, true)) {
+            ControlStateStore.setActiveModeEnabled(context, true)
+            return true
+        }
+        // Complete rollback, including an already launched daemon.
+        val rolledBack = startWatchdog(context, target, false)
+        if (!rolledBack) stopWatchdog(context)
+        setTimeout(false)
+        ControlStateStore.setActiveModeEnabled(context, false)
+        return false
+    }
 
-    private fun readActiveModeTimeout(): String? {
-        val result = ShellUtils.execRoot("settings get system $KEY_SUBSCREEN_DISPLAY_TIME")
-        return if (result.isSuccess) result.output.trim() else null
+    fun getActiveModeState(): Boolean? = readActiveModeTimeout()?.let { it == ACTIVE_TIME }
+    private fun readActiveModeTimeout(): String? = ShellUtils.execRoot("settings get system $TIME_KEY").let {
+        if (it.isSuccess) it.output.trim().let { value ->
+            if (value == "null") DEFAULT_TIME else value.takeIf { it.toLongOrNull() != null }
+        } else null
     }
 }

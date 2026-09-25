@@ -66,6 +66,10 @@ class MainActivity : AppCompatActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
+        if (!keepOverlayHost && intent.getBooleanExtra(EXTRA_KEEP_OVERLAY_HOST, false)) {
+            recreate()
+            return
+        }
         Log.i("BrightnessPanel", "Activity reused from QS tile")
         if (intent.getBooleanExtra(EXTRA_KEEP_OVERLAY_HOST, false)) showOverlay()
     }
@@ -91,11 +95,20 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun updatePanelBlur() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return
         window.attributes = window.attributes.apply {
             setBlurBehindRadius(
                 if (blurAvailable) ((28 * resources.displayMetrics.density) * panelBlurFraction).toInt()
                 else 0
             )
+        }
+    }
+
+    override fun onStop() {
+        super.onStop()
+        if (keepOverlayHost && !isChangingConfigurations && OverlayHost.current() === this) {
+            stopService(Intent(this, BrightnessOverlayService::class.java))
+            finish()
         }
     }
 

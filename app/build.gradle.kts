@@ -15,13 +15,14 @@ val releaseStorePath = localProperties.getProperty("bright.signing.storeFile")
 android {
     namespace = "brightnesslock.rongshangs.top"
     compileSdk = 35
+    ndkVersion = "28.2.13676358"
 
     defaultConfig {
         applicationId = "brightnesslock.rongshangs.top"
         minSdk = 26
         targetSdk = 35
-        versionCode = 22
-        versionName = "1.7.0"
+        versionCode = 23
+        versionName = "1.8.0"
     }
 
     signingConfigs {
@@ -44,11 +45,6 @@ android {
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
             
-            // Disable lint during release build to avoid TLS handshake issues in this environment
-            lint {
-                checkReleaseBuilds = false
-                abortOnError = false
-            }
         }
     }
     compileOptions {
@@ -56,6 +52,23 @@ android {
         targetCompatibility = JavaVersion.VERSION_11
     }
 }
+
+val buildWatchdog by tasks.registering(Exec::class) {
+    val source = file("src/main/cpp/watchdog.c")
+    val output = file("src/main/assets/watchdog_c")
+    inputs.files(source, file("src/main/cpp/watchdog_logic.h"))
+    inputs.property("ndkVersion", "28.2.13676358")
+    outputs.file(output)
+    val sdkPath = localProperties.getProperty("sdk.dir")
+        ?: System.getenv("ANDROID_SDK_ROOT") ?: System.getenv("ANDROID_HOME")
+        ?: error("Android SDK path is required")
+    val windows = System.getProperty("os.name").startsWith("Windows")
+    val host = if (windows) "windows-x86_64" else if (System.getProperty("os.name").contains("Mac")) "darwin-x86_64" else "linux-x86_64"
+    val compiler = file("$sdkPath/ndk/28.2.13676358/toolchains/llvm/prebuilt/$host/bin/clang${if (windows) ".exe" else ""}")
+    inputs.file(compiler)
+    commandLine(compiler.absolutePath, "--target=aarch64-linux-android26", "-static", "-O2", "-Wall", "-Wextra", "-Werror", "-Wl,-s", "-Wl,--build-id=sha1", source.absolutePath, "-o", output.absolutePath)
+}
+tasks.named("preBuild") { dependsOn(buildWatchdog) }
 
 dependencies {
     implementation(libs.androidx.core.ktx)

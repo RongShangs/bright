@@ -7,6 +7,7 @@ object ControlStateStore {
     private const val PREFS_NAME = "config"
     private const val KEY_TAKEOVER = "is_takeover"
     private const val KEY_ACTIVE_MODE = "is_active_mode"
+    private const val KEY_TARGET_BRIGHTNESS = "target_brightness"
 
     fun isTakeoverActive(context: Context): Boolean =
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -27,6 +28,17 @@ object ControlStateStore {
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
             .edit()
             .putBoolean(KEY_ACTIVE_MODE, enabled)
+            .apply()
+    }
+
+    fun getTargetBrightness(context: Context): Int =
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .getInt(KEY_TARGET_BRIGHTNESS, -1)
+
+    fun setTargetBrightness(context: Context, target: Int) {
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit()
+            .putInt(KEY_TARGET_BRIGHTNESS, target)
             .apply()
     }
 }
