@@ -16,6 +16,7 @@ class VerticalBrightnessSlider @JvmOverloads constructor(
 
     private var progress = 0.5f // 0.0 to 1.0
     private var maxBrightness = 4095
+    private val minUserBrightness: Int get() = minOf(10, maxBrightness)
     
     private val bgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = ContextCompat.getColor(context, R.color.slider_background)
@@ -115,14 +116,17 @@ class VerticalBrightnessSlider @JvmOverloads constructor(
             MotionEvent.ACTION_MOVE -> {
                 val deltaY = lastY - event.y
                 val deltaProgress = deltaY / height
-                progress = (progress + deltaProgress).coerceIn(0f, 1f)
+                progress = (progress + deltaProgress)
+                    .coerceIn(minUserBrightness.toFloat() / maxBrightness, 1f)
                 lastY = event.y
                 invalidate()
-                onSliding?.invoke((progress * maxBrightness).toInt())
+                onSliding?.invoke(userBrightness())
                 return true
             }
             MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
-                val finalValue = (progress * maxBrightness).toInt()
+                progress = progress.coerceAtLeast(minUserBrightness.toFloat() / maxBrightness)
+                invalidate()
+                val finalValue = userBrightness()
                 onProgressChanged?.invoke(finalValue)
                 performClick()
                 return true
@@ -134,4 +138,7 @@ class VerticalBrightnessSlider @JvmOverloads constructor(
     override fun performClick(): Boolean {
         return super.performClick()
     }
+
+    private fun userBrightness(): Int =
+        (progress * maxBrightness).toInt().coerceIn(minUserBrightness, maxBrightness)
 }

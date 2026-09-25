@@ -21,6 +21,8 @@ class MainActivity : AppCompatActivity() {
     private var keepOverlayHost = false
     private var receiverRegistered = false
     private var blurListener: Consumer<Boolean>? = null
+    private var blurAvailable = false
+    private var panelBlurFraction = 0f
     private val overlayClosedReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             if (intent?.action == BrightnessOverlayService.ACTION_OVERLAY_CLOSED) finish()
@@ -75,13 +77,26 @@ class MainActivity : AppCompatActivity() {
         val manager = getSystemService(WINDOW_SERVICE) as WindowManager
         window.addFlags(WindowManager.LayoutParams.FLAG_BLUR_BEHIND)
         val listener = Consumer<Boolean> { enabled ->
-            window.attributes = window.attributes.apply {
-                setBlurBehindRadius(if (enabled) (28 * resources.displayMetrics.density).toInt() else 0)
-            }
+            blurAvailable = enabled
+            updatePanelBlur()
         }
         blurListener = listener
         manager.addCrossWindowBlurEnabledListener(mainExecutor, listener)
         listener.accept(manager.isCrossWindowBlurEnabled)
+    }
+
+    fun setPanelBlurFraction(fraction: Float) {
+        panelBlurFraction = fraction.coerceIn(0f, 1f)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) updatePanelBlur()
+    }
+
+    private fun updatePanelBlur() {
+        window.attributes = window.attributes.apply {
+            setBlurBehindRadius(
+                if (blurAvailable) ((28 * resources.displayMetrics.density) * panelBlurFraction).toInt()
+                else 0
+            )
+        }
     }
 
     override fun onDestroy() {

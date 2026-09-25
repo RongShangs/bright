@@ -1,8 +1,12 @@
 package brightnesslock.rongshangs.top
 
+import android.animation.Animator
+import android.animation.AnimatorListenerAdapter
+import android.animation.ValueAnimator
 import android.app.Service
 import android.content.Context
 import android.content.Intent
+import android.content.res.Configuration
 import android.graphics.PixelFormat
 import android.net.Uri
 import android.os.Handler
@@ -17,6 +21,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.view.WindowManager
 import android.widget.FrameLayout
+import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
 import androidx.core.content.ContextCompat
@@ -33,6 +38,9 @@ class BrightnessOverlayService : Service() {
     private lateinit var windowManager: WindowManager
     private var overlayView: View? = null
     private var activityHost: MainActivity? = null
+    private var overlayWindowParams: WindowManager.LayoutParams? = null
+    private var panelAnimator: ValueAnimator? = null
+    private var isClosing = false
 
     private val mainHandler = Handler(Looper.getMainLooper())
     private val ioExecutor = Executors.newCachedThreadPool()
@@ -42,6 +50,10 @@ class BrightnessOverlayService : Service() {
     private var syncThread: Thread? = null
     private var isUserSliding = false
     private var lastTargetValue = -1
+    private var activeModeChangeInFlight = false
+    private var activeModeVersion = 0
+    private var activeModeEnabled: Boolean? = null
+    private var hintBesideCard = false
 
     private lateinit var takeoverStatus: TextView
     private lateinit var targetVal: TextView
@@ -49,6 +61,9 @@ class BrightnessOverlayService : Service() {
     private lateinit var maxVal: TextView
     private lateinit var rootStatus: TextView
     private lateinit var aodText: TextView
+    private lateinit var activeModeButton: FrameLayout
+    private lateinit var activeModeText: TextView
+    private lateinit var activeModeHint: LinearLayout
     private lateinit var brightnessSlider: VerticalBrightnessSlider
 
     private val refreshRunnable = object : Runnable {
@@ -81,10 +96,18 @@ class BrightnessOverlayService : Service() {
         // later tile taps look ignored even after the foreground app has changed.
         overlayView?.let { existing ->
             mainHandler.removeCallbacks(refreshRunnable)
+            cancelPanelAnimation()
             removePanelView(existing)
             overlayView = null
         }
-        showOverlay()
+        isClosing = false
+        try {
+            showOverlay()
+        } catch (error: RuntimeException) {
+            Log.e("BrightnessPanel", "Failed to open control panel", error)
+            showToast("面板打开失败：${error.javaClass.simpleName}")
+            closeOverlay()
+        }
         return START_NOT_STICKY
     }
 
@@ -97,17 +120,95 @@ class BrightnessOverlayService : Service() {
             false
         )
         val horizontalMargin = dp(16)
-        val panelWidth = min(resources.displayMetrics.widthPixels - horizontalMargin * 2, dp(380))
+        val screenWidth = resources.displayMetrics.widthPixels
+        val sideBySide = resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE &&
+            screenWidth >= dp(620)
+        hintBesideCard = sideBySide
+        val landscapeLeftMargin = maxOf(dp(72), (screenWidth * 0.09f).toInt())
+        val landscapeSpace = screenWidth - landscapeLeftMargin - horizontalMargin - dp(16)
+        val panelWidth = if (sideBySide) {
+            min(dp(380), (landscapeSpace * 0.65f).toInt())
+        } else {
+            min(screenWidth - horizontalMargin * 2, dp(380))
+        }
+        val cardParams = FrameLayout.LayoutParams(
+            panelWidth,
+            FrameLayout.LayoutParams.WRAP_CONTENT,
+            if (sideBySide) Gravity.START or Gravity.CENTER_VERTICAL else Gravity.CENTER
+        ).apply {
+            if (sideBySide) leftMargin = landscapeLeftMargin
+        }
+        val hintWidth = if (sideBySide) {
+            landscapeSpace - panelWidth
+        } else panelWidth
+        val hintParams = FrameLayout.LayoutParams(
+            hintWidth,
+            FrameLayout.LayoutParams.WRAP_CONTENT,
+            if (sideBySide) Gravity.END or Gravity.CENTER_VERTICAL else Gravity.CENTER
+        ).apply {
+            if (sideBySide) rightMargin = horizontalMargin
+        }
+        val hint = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER
+            addView(TextView(this@BrightnessOverlayService).apply {
+                text = "仅将自动息屏时间修改为无限\n双击背屏或按电源键仍会导致背屏息屏"
+                setTextColor(color(R.color.text_primary))
+                textSize = 12f
+                gravity = Gravity.CENTER
+                includeFontPadding = false
+            })
+            addView(TextView(this@BrightnessOverlayService).apply {
+                text = "背屏将保持活跃不会主动休眠或者进入AOD\n耗电与烧屏风险增加"
+                setTextColor(color(R.color.hint_warning))
+                textSize = 12f
+                gravity = Gravity.CENTER
+                includeFontPadding = false
+                setPadding(0, dp(6), 0, 0)
+            })
+            visibility = View.GONE
+            if (!sideBySide) translationY = dp(160).toFloat()
+        }
+        activeModeHint = hint
         val view = FrameLayout(this).apply {
             isClickable = true
-            addView(
-                card,
-                FrameLayout.LayoutParams(
-                    panelWidth,
-                    FrameLayout.LayoutParams.WRAP_CONTENT,
-                    Gravity.CENTER
-                )
-            )
+            alpha = 0f
+            addView(card, cardParams)
+            addView(hint, hintParams)
+        }
+        if (sideBySide) {
+            var cutoutLeft = 0
+            var cutoutRight = 0
+            fun updateLandscapePosition(width: Int) {
+                if (width <= 0) return
+                val left = maxOf(dp(72), (width * 0.09f).toInt(), cutoutLeft + dp(16))
+                val right = maxOf(dp(16), cutoutRight + dp(16))
+                val space = width - left - right - dp(16)
+                if (space <= 0) return
+                val cardWidth = min(dp(380), (space * 0.65f).toInt())
+                val textWidth = space - cardWidth
+                if (cardParams.leftMargin != left || cardParams.width != cardWidth ||
+                    hintParams.rightMargin != right || hintParams.width != textWidth
+                ) {
+                    cardParams.leftMargin = left
+                    cardParams.width = cardWidth
+                    hintParams.rightMargin = right
+                    hintParams.width = textWidth
+                    card.layoutParams = cardParams
+                    hint.layoutParams = hintParams
+                }
+            }
+            view.addOnLayoutChangeListener { _, left, _, right, _, _, _, _, _ ->
+                updateLandscapePosition(right - left)
+            }
+            view.setOnApplyWindowInsetsListener { _, insets ->
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
+                    cutoutLeft = insets.displayCutout?.safeInsetLeft ?: 0
+                    cutoutRight = insets.displayCutout?.safeInsetRight ?: 0
+                    updateLandscapePosition(view.width)
+                }
+                insets
+            }
         }
         overlayView = view
         bindViews(view)
@@ -127,11 +228,10 @@ class BrightnessOverlayService : Service() {
             PixelFormat.TRANSLUCENT
         ).apply {
             gravity = Gravity.CENTER
-            windowAnimations = android.R.style.Animation_Dialog
             if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S &&
                 windowManager.isCrossWindowBlurEnabled
             ) {
-                setBlurBehindRadius(dp(28))
+                setBlurBehindRadius(0)
             }
         }
 
@@ -148,13 +248,16 @@ class BrightnessOverlayService : Service() {
         val host = OverlayHost.current()
         if (host != null) {
             activityHost = host
+            overlayWindowParams = null
             host.setContentView(view)
             Log.i("BrightnessPanel", "Panel attached to Activity")
         } else {
             activityHost = null
             windowManager.addView(view, params)
+            overlayWindowParams = params
             Log.i("BrightnessPanel", "Panel attached as overlay")
         }
+        animatePanel(view, 1f)
         refreshFullUi()
         mainHandler.post(refreshRunnable)
     }
@@ -166,12 +269,19 @@ class BrightnessOverlayService : Service() {
         maxVal = view.findViewById(R.id.maxVal)
         rootStatus = view.findViewById(R.id.rootStatus)
         aodText = view.findViewById(R.id.aodText)
+        activeModeButton = view.findViewById(R.id.activeModeBtn)
+        activeModeText = view.findViewById(R.id.activeModeText)
+        activeModeEnabled = null
+        activeModeButton.isEnabled = false
         brightnessSlider = view.findViewById(R.id.brightnessSlider)
     }
 
     private fun bindActions(view: View) {
         view.findViewById<FrameLayout>(R.id.aodToggleBtn).setOnClickListener { toggleAod() }
         view.findViewById<FrameLayout>(R.id.restoreBtn).setOnClickListener { restoreSystemControl() }
+        activeModeButton.setOnClickListener {
+            activeModeEnabled?.let { setActiveMode(!it) }
+        }
         view.findViewById<TextView>(R.id.developerLink).setOnClickListener {
             openUrl("https://www.coolapk.com/u/3261403")
         }
@@ -202,20 +312,55 @@ class BrightnessOverlayService : Service() {
         }
     }
 
+    private fun setActiveMode(enabled: Boolean) {
+        if (activeModeChangeInFlight) return
+        activeModeChangeInFlight = true
+        activeModeVersion++
+        activeModeButton.isEnabled = false
+        activeModeText.text = "永不息屏\n设置中"
+        val panel = overlayView
+        executeIo {
+            val success = BrightnessManager.setActiveMode(enabled)
+            val actual = BrightnessManager.getActiveModeState()
+            mainHandler.post {
+                activeModeVersion++
+                activeModeChangeInFlight = false
+                if (actual != null) ControlStateStore.setActiveModeEnabled(this, actual)
+                if (overlayView !== panel) {
+                    if (overlayView != null) refreshFullUi()
+                    return@post
+                }
+                renderActiveMode(actual)
+                if (success && !enabled) {
+                    showToast("已恢复正常息屏时间")
+                } else if (!success) {
+                    showToast("息屏时间设置失败，请检查 Root 授权")
+                }
+            }
+        }
+    }
+
     private fun restoreSystemControl() {
+        if (activeModeChangeInFlight) {
+            showToast("请等待息屏时间设置完成")
+            return
+        }
         stopSync()
         executeIo {
             val success = BrightnessManager.restoreSystemControl()
             mainHandler.post {
+                if (success) {
+                    ControlStateStore.setTakeoverActive(this, false)
+                    ControlStateStore.setActiveModeEnabled(this, false)
+                }
                 if (overlayView != null) {
                     if (success) {
                         lastTargetValue = -1
-                        ControlStateStore.setTakeoverActive(this, false)
                         showToast("已恢复系统控制")
                         closeOverlay()
                     } else {
                         showToast("恢复失败，请检查 Root 授权")
-                        updateStatusLabels()
+                        refreshFullUi()
                     }
                 }
             }
@@ -286,11 +431,13 @@ class BrightnessOverlayService : Service() {
     }
 
     private fun refreshFullUi() {
+        val activeModeVersionAtStart = activeModeVersion
         executeIo {
             val max = BrightnessManager.getMaxBrightness()
             val current = BrightnessManager.getCurrentBrightness()
             val state = BrightnessManager.getCurrentState()
             val aodEnabled = BrightnessManager.isRearAodEnabled()
+            val activeModeEnabled = BrightnessManager.getActiveModeState()
             val rootAvailable = ShellUtils.isRootAvailable()
 
             mainHandler.post {
@@ -315,7 +462,10 @@ class BrightnessOverlayService : Service() {
                 }
 
                 aodText.text = if (aodEnabled) "AOD\n已开启" else "AOD\n已关闭"
-                aodText.setTextColor(color(if (aodEnabled) R.color.success else R.color.text_primary))
+                aodText.setTextColor(color(R.color.text_primary))
+                if (activeModeVersionAtStart == activeModeVersion && !activeModeChangeInFlight) {
+                    renderActiveMode(activeModeEnabled)
+                }
                 updateStatusLabels(rootAvailable, state)
             }
         }
@@ -371,6 +521,26 @@ class BrightnessOverlayService : Service() {
         takeoverStatus.setTextColor(color)
     }
 
+    private fun renderActiveMode(enabled: Boolean?) {
+        activeModeEnabled = enabled
+        if (enabled != null) ControlStateStore.setActiveModeEnabled(this, enabled)
+        activeModeButton.isEnabled = enabled != null && !activeModeChangeInFlight
+        activeModeText.text = when (enabled) {
+            true -> "永不息屏\n已开启"
+            false -> "永不息屏\n已关闭"
+            null -> "永不息屏\n状态未知"
+        }
+        activeModeText.setTextColor(color(R.color.warning_text))
+        activeModeButton.contentDescription = activeModeText.text.toString().replace('\n', ' ')
+        activeModeHint.visibility = if (enabled == true) View.VISIBLE else View.GONE
+        if (enabled == true && !hintBesideCard) {
+            activeModeHint.post {
+                val card = overlayView?.findViewById<View>(R.id.dialogCard) ?: return@post
+                activeModeHint.translationY = (card.height + activeModeHint.height) / 2f + dp(12)
+            }
+        }
+    }
+
     private fun openUrl(url: String) {
         try {
             startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)).apply {
@@ -383,16 +553,73 @@ class BrightnessOverlayService : Service() {
     }
 
     private fun closeOverlay() {
+        if (isClosing) return
+        isClosing = true
         mainHandler.removeCallbacks(refreshRunnable)
         stopSync()
-        overlayView?.let { removePanelView(it) }
+        val view = overlayView
+        if (view != null && view.parent != null) {
+            animatePanel(view, 0f) {
+                if (overlayView === view && isClosing) finishCloseOverlay()
+            }
+        } else {
+            finishCloseOverlay()
+        }
+    }
+
+    private fun animatePanel(view: View, targetAlpha: Float, onEnd: (() -> Unit)? = null) {
+        cancelPanelAnimation()
+        val animator = ValueAnimator.ofFloat(view.alpha, targetAlpha).apply {
+            duration = PANEL_FADE_MS
+            addUpdateListener { frame ->
+                val opacity = frame.animatedValue as Float
+                view.alpha = opacity
+                setPanelBlur(view, opacity)
+            }
+            addListener(object : AnimatorListenerAdapter() {
+                override fun onAnimationEnd(animation: Animator) {
+                    if (panelAnimator === animation) {
+                        panelAnimator = null
+                        onEnd?.invoke()
+                    }
+                }
+            })
+        }
+        panelAnimator = animator
+        animator.start()
+    }
+
+    private fun setPanelBlur(view: View, opacity: Float) {
+        if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.S) return
+        activityHost?.let {
+            it.setPanelBlurFraction(opacity)
+            return
+        }
+        val params = overlayWindowParams ?: return
+        if (view.parent == null || !windowManager.isCrossWindowBlurEnabled) return
+        params.setBlurBehindRadius((dp(28) * opacity).toInt())
+        runCatching { windowManager.updateViewLayout(view, params) }
+    }
+
+    private fun cancelPanelAnimation() {
+        val animator = panelAnimator
+        panelAnimator = null
+        animator?.cancel()
+    }
+
+    private fun finishCloseOverlay() {
+        cancelPanelAnimation()
+        overlayView?.let {
+            removePanelView(it)
+        }
         overlayView = null
+        isClosing = false
         sendBroadcast(Intent(ACTION_OVERLAY_CLOSED).setPackage(packageName))
         stopSelf()
     }
 
-    private fun showToast(message: String) {
-        Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
+    private fun showToast(message: String, duration: Int = Toast.LENGTH_SHORT) {
+        Toast.makeText(this, message, duration).show()
     }
 
     private fun executeIo(block: () -> Unit) {
@@ -410,13 +637,17 @@ class BrightnessOverlayService : Service() {
             activityHost = null
         } else {
             runCatching { windowManager.removeViewImmediate(view) }
+            overlayWindowParams = null
         }
     }
 
     override fun onDestroy() {
         mainHandler.removeCallbacksAndMessages(null)
         stopSync()
-        overlayView?.let { removePanelView(it) }
+        cancelPanelAnimation()
+        overlayView?.let {
+            removePanelView(it)
+        }
         overlayView = null
         ioExecutor.shutdownNow()
         Thread({ ShellUtils.destroy() }, "root-shell-cleanup").apply {
@@ -426,6 +657,7 @@ class BrightnessOverlayService : Service() {
     }
 
     companion object {
+        private const val PANEL_FADE_MS = 180L
         private const val REFRESH_INTERVAL_MS = 500L
         private const val SYNC_TIMEOUT_MS = 5_000L
         private const val MAX_SYNC_ATTEMPTS = 30

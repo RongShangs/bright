@@ -8,6 +8,9 @@ object BrightnessManager {
     private const val TAG = "BrightnessManager"
     private const val BRIGHTNESS_PATH = "/sys/class/backlight/panel1-backlight/brightness"
     private const val MAX_BRIGHTNESS_PATH = "/sys/class/backlight/panel1-backlight/max_brightness"
+    private const val KEY_SUBSCREEN_DISPLAY_TIME = "subscreen_display_time"
+    private const val DISPLAY_TIME_DEFAULT = "10000"
+    private const val DISPLAY_TIME_ACTIVE = "2147483647"
 
     const val WATCHDOG_BIN = "/data/local/tmp/bright_watchdog"
     private const val WATCHDOG_PID = "/data/local/tmp/bright_watchdog.pid"
@@ -80,11 +83,12 @@ object BrightnessManager {
 
     fun restoreSystemControl(): Boolean {
         stopWatchdog()
-        val success = ShellUtils.execRoot(
+        val brightnessRestored = ShellUtils.execRoot(
             "chmod 644 $BRIGHTNESS_PATH && echo 500 > $BRIGHTNESS_PATH"
         ).isSuccess
+        val activeModeDisabled = setActiveMode(false)
         ShellUtils.destroy()
-        return success
+        return brightnessRestored && activeModeDisabled
     }
 
     fun getCurrentState(): BrightnessState {
@@ -110,5 +114,29 @@ object BrightnessManager {
             ShellUtils.execRoot("input -d 1 keyevent KEYCODE_WAKEUP")
         }
         return success
+    }
+
+    /** Sets the rear display timeout. This setting is independent of brightness and AOD. */
+    fun setActiveMode(enabled: Boolean): Boolean {
+        val value = if (enabled) DISPLAY_TIME_ACTIVE else DISPLAY_TIME_DEFAULT
+        val saved = ShellUtils.execRoot(
+            "settings put system $KEY_SUBSCREEN_DISPLAY_TIME $value"
+        ).isSuccess
+        if (!saved || readActiveModeTimeout() != value) return false
+
+        if (enabled) {
+            val wake = ShellUtils.execRoot("input -d 1 keyevent KEYCODE_WAKEUP")
+            if (!wake.isSuccess) Log.w(TAG, "常亮超时已保存，但立即唤醒背屏失败: ${wake.error}")
+        }
+        return true
+    }
+
+    /** Null means the Root read failed; do not falsely display the mode as disabled. */
+    fun getActiveModeState(): Boolean? =
+        readActiveModeTimeout()?.let { it == DISPLAY_TIME_ACTIVE }
+
+    private fun readActiveModeTimeout(): String? {
+        val result = ShellUtils.execRoot("settings get system $KEY_SUBSCREEN_DISPLAY_TIME")
+        return if (result.isSuccess) result.output.trim() else null
     }
 }

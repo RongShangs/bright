@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="640" viewBox="0 0 1200 640" role="img" aria-labelledby="title desc">
   <title id="title">背屏激发控制面板界面示意图</title>
-  <desc id="desc">浅色玻璃面板，左侧亮度状态与数值，中间垂直亮度滑块，右侧 AOD 与恢复系统控制按钮。</desc>
+  <desc id="desc">浅色玻璃面板，左侧亮度状态与数值，中间垂直亮度滑块，右侧依次为 AOD、永不息屏和恢复系统控制按钮。</desc>
   <defs>
     <linearGradient id="scene" x2="1" y2="1">
       <stop stop-color="#222a39"/>
@@ -52,12 +52,15 @@
     <circle r="16" fill="#5b4314" stroke="none"/>
     <path d="M0-36v-7M0 36v7M-36 0h-7M36 0h7M-26-26l-5-5M26 26l5 5M26-26l5-5M-26 26l-5 5"/>
   </g>
-  <rect x="850" y="145" width="215" height="165" rx="38" fill="#7f8587" fill-opacity=".1" stroke="#5e6567" stroke-opacity=".12"/>
-  <rect x="850" y="330" width="215" height="165" rx="38" fill="#e25436" fill-opacity=".08" stroke="#d94d36" stroke-opacity=".17"/>
+  <rect x="850" y="145" width="215" height="110" rx="30" fill="#7f8587" fill-opacity=".1" stroke="#5e6567" stroke-opacity=".12"/>
+  <rect x="850" y="265" width="215" height="110" rx="30" fill="#e25436" fill-opacity=".08" stroke="#d94d36" stroke-opacity=".17"/>
+  <rect x="850" y="385" width="215" height="110" rx="30" fill="#23885e" fill-opacity=".08" stroke="#23885e" stroke-opacity=".17"/>
   <g font-family="Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="28" font-weight="700" text-anchor="middle">
-    <text x="958" y="213" fill="#1c1c1e">AOD</text>
-    <text x="958" y="254" fill="#23885e">已开启</text>
-    <text x="958" y="403" fill="#aa3f2c">恢复</text>
-    <text x="958" y="446" fill="#aa3f2c">系统控制</text>
+    <text x="958" y="191" fill="#1c1c1e">AOD</text>
+    <text x="958" y="230" fill="#1c1c1e">已开启</text>
+    <text x="958" y="311" fill="#aa3f2c" font-size="23">永不息屏</text>
+    <text x="958" y="350" fill="#aa3f2c">已关闭</text>
+    <text x="958" y="431" fill="#23885e">恢复</text>
+    <text x="958" y="470" fill="#23885e">系统控制</text>
   </g>
 </svg>

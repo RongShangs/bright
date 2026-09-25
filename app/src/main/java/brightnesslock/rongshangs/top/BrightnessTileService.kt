@@ -50,7 +50,10 @@ class BrightnessTileService : TileService() {
                 Log.w(TAG, "Direct tile launch unavailable; using onClick fallback", error)
             }
         }
-        if (ControlStateStore.isTakeoverActive(this)) {
+        if (ControlStateStore.isActiveModeEnabled(this)) {
+            tile.state = Tile.STATE_ACTIVE
+            tile.label = "背屏永不息屏"
+        } else if (ControlStateStore.isTakeoverActive(this)) {
             tile.state = Tile.STATE_ACTIVE
             tile.label = "背屏接管中"
         } else {

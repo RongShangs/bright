@@ -207,12 +207,35 @@
             </FrameLayout>
 
             <FrameLayout
+                android:id="@+id/activeModeBtn"
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_marginTop="6dp"
+                android:layout_weight="1"
+                android:background="@drawable/bg_action_warning"
+                android:clickable="true"
+                android:contentDescription="切换永不息屏"
+                android:focusable="true">
+
+                <TextView
+                    android:id="@+id/activeModeText"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="center"
+                    android:gravity="center"
+                    android:text="永不息屏\n读取中"
+                    android:textColor="@color/warning_text"
+                    android:textSize="11sp"
+                    android:textStyle="bold" />
+            </FrameLayout>
+
+            <FrameLayout
                 android:id="@+id/restoreBtn"
                 android:layout_width="match_parent"
                 android:layout_height="0dp"
-                android:layout_marginTop="10dp"
+                android:layout_marginTop="6dp"
                 android:layout_weight="1"
-                android:background="@drawable/bg_action_warning"
+                android:background="@drawable/bg_action_success"
                 android:clickable="true"
                 android:focusable="true">
 
@@ -222,7 +245,7 @@
                     android:layout_gravity="center"
                     android:gravity="center"
                     android:text="恢复\n系统控制"
-                    android:textColor="@color/warning_text"
+                    android:textColor="@color/success"
                     android:textSize="12sp"
                     android:textStyle="bold" />
             </FrameLayout>
