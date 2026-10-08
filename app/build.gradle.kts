@@ -14,15 +14,15 @@ val releaseStorePath = localProperties.getProperty("bright.signing.storeFile")
 
 android {
     namespace = "brightnesslock.rongshangs.top"
-    compileSdk = 35
+    compileSdk = 36
     ndkVersion = "28.2.13676358"
 
     defaultConfig {
         applicationId = "brightnesslock.rongshangs.top"
         minSdk = 26
         targetSdk = 35
-        versionCode = 23
-        versionName = "1.8.0"
+        versionCode = 24
+        versionName = "2.0.0"
     }
 
     signingConfigs {
@@ -51,6 +51,9 @@ android {
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11
     }
+    testOptions {
+        unitTests.isIncludeAndroidResources = true
+    }
 }
 
 val buildWatchdog by tasks.registering(Exec::class) {
@@ -73,7 +76,10 @@ tasks.named("preBuild") { dependsOn(buildWatchdog) }
 dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.appcompat)
+    compileOnly("io.github.libxposed:api:101.0.1")
+    implementation("io.github.libxposed:service:101.0.0")
     testImplementation(libs.junit)
+    testImplementation("org.robolectric:robolectric:4.16.1")
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
 }

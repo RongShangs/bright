@@ -1,3 +1,17 @@
 <resources>
     <string name="app_name">背屏控制</string>
+    <string name="xposed_description">可选的背屏暗光与遮挡息屏拦截，仅作用于背屏中心。原有亮度控制仍使用 Root。</string>
+    <string name="hook_settings_title">背屏策略</string>
+    <string name="hook_settings_back">‹ 返回</string>
+    <string name="hook_dark_switch">阻止暗光自动息屏</string>
+    <string name="hook_cover_switch">阻止遮挡自动息屏</string>
+    <string name="policy_root_section">ROOT · 活跃显示</string>
+    <string name="policy_lsp_section">LSP · AOD 息屏策略</string>
+    <string name="policy_active_switch">永不息屏</string>
+    <string name="policy_active_summary">持续检测并尝试唤醒背屏，保持活跃画面；无需 LSP。</string>
+    <string name="hook_dark_summary">当前固件的暗光延迟为 5 分钟。</string>
+    <string name="hook_cover_summary">仅针对背屏，不改变主屏通话感应。</string>
+    <string name="hook_power_warning">关闭省电策略会增加耗电与烧屏风险。</string>
+    <string name="hook_help_entry">启用方式与适配说明 ⓘ</string>
+    <string name="hook_setup">在 LSPosed 中启用“背屏控制”，作用域选择“背屏中心”（com.xiaomi.subscreencenter）。首次启用或更新模块后，需要重新加载背屏中心；普通用户可重启手机。仅覆盖安装 APK 不会替换已经加载的模块代码。\n\n两个开关互相独立，仅拦截背屏 AOD 的暗光与遮挡策略，不影响主屏通话感应，也不代替“永不息屏”。\n\n当前适配基于 OS4.0.0.41.XBLCNXM；其他固件尚未验证。关闭省电策略会增加背屏耗电与烧屏风险。</string>
 </resources>

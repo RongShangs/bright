@@ -16,6 +16,8 @@
     <color name="warning_text">#FFFFD3C7</color>
     <color name="divider">#FF555861</color>
     <color name="action_warning_surface">#18FF7452</color>
+    <color name="action_policy_surface">#28FFC857</color>
+    <color name="action_policy_stroke">#44FFC857</color>
     <color name="action_warning_stroke">#28FF8C70</color>
     <color name="action_success_surface">#1867D7A4</color>
     <color name="action_success_stroke">#2867D7A4</color>

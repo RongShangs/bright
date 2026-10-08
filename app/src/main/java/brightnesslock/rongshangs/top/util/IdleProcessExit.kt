@@ -22,6 +22,12 @@ object IdleProcessExit {
         schedule(context.applicationContext)
     }
 
+    /** A framework configuration-provider call may start the App without any visible component. */
+    fun scheduleIfIdle(context: Context) {
+        check(Looper.myLooper() == Looper.getMainLooper())
+        schedule(context.applicationContext)
+    }
+
     private fun schedule(context: Context) {
         val ticket = gate.ticket() ?: return
         handler.removeCallbacksAndMessages(null)

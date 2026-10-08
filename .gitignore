@@ -16,3 +16,6 @@ local.properties
 
 # Kotlin compiler cache
 .kotlin/
+
+# Private device firmware/diagnostics (never commit collected data)
+/tools/diagnostics/output/

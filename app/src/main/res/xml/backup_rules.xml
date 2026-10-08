@@ -7,6 +7,7 @@
 -->
 <full-backup-content>
     <exclude domain="sharedpref" path="config.xml" />
+    <exclude domain="sharedpref" path="hook_ui_cache.xml" />
     <exclude domain="file" path="watchdog_c" />
     <!--
    <include domain="sharedpref" path="."/>

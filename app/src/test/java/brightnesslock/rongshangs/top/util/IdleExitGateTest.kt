@@ -4,6 +4,13 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class IdleExitGateTest {
+    @Test fun providerOnlyLaunchIsIdleUntilAComponentAcquiresOwnership() {
+        val gate = IdleExitGate()
+        val providerExit = gate.ticket()!!
+        assertTrue(gate.accepts(providerExit))
+        gate.acquire(Any())
+        assertFalse(gate.accepts(providerExit))
+    }
     @Test fun panelMustCloseBeforeExit() {
         val gate = IdleExitGate(); val panel = Any()
         gate.acquire(panel); assertNull(gate.ticket())

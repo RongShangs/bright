@@ -15,6 +15,7 @@ import android.os.Looper
 import android.provider.Settings
 import android.util.Log
 import android.view.Gravity
+import android.view.ContextThemeWrapper
 import android.view.LayoutInflater
 import android.view.MotionEvent
 import android.view.View
@@ -25,6 +26,9 @@ import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
 import androidx.core.content.ContextCompat
+import androidx.appcompat.app.AlertDialog
+import androidx.appcompat.widget.SwitchCompat
+import brightnesslock.rongshangs.top.hook.HookBridge
 import brightnesslock.rongshangs.top.ui.VerticalBrightnessSlider
 import brightnesslock.rongshangs.top.util.BrightnessManager
 import brightnesslock.rongshangs.top.util.ControlStateStore
@@ -58,6 +62,15 @@ class BrightnessOverlayService : Service() {
     private var activeModeVersion = 0
     private var activeModeEnabled: Boolean? = null
     private var hintBesideCard = false
+    private var hookChangeInFlight = false
+    private var renderingHooks = false
+    private var observingHooks = false
+    private var hookHelpDialog: AlertDialog? = null
+    private var primaryCard: View? = null
+    private var settingsCard: View? = null
+    private val hookObserver: (HookBridge.State) -> Unit = { state ->
+        if (overlayView != null && !destroyed) renderHookState(state)
+    }
 
     private lateinit var takeoverStatus: TextView
     private lateinit var targetVal: TextView
@@ -65,10 +78,15 @@ class BrightnessOverlayService : Service() {
     private lateinit var maxVal: TextView
     private lateinit var rootStatus: TextView
     private lateinit var aodText: TextView
-    private lateinit var activeModeButton: FrameLayout
-    private lateinit var activeModeText: TextView
+    private var activeModeSwitch: SwitchCompat? = null
+    private var activeModeStatus: TextView? = null
+    private var renderingActiveMode = false
+    private var activeGuardUnhealthy = false
     private lateinit var activeModeHint: LinearLayout
     private lateinit var brightnessSlider: VerticalBrightnessSlider
+    private var hookStatus: TextView? = null
+    private var blockDarkSwitch: SwitchCompat? = null
+    private var blockCoverSwitch: SwitchCompat? = null
 
     private val refreshRunnable = object : Runnable {
         override fun run() {
@@ -86,7 +104,7 @@ class BrightnessOverlayService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         Log.i("BrightnessPanel", "Panel service started; activity host=${OverlayHost.current() != null}")
         if (intent?.action == ACTION_DISMISS) {
-            closeOverlay()
+            if (settingsCard != null) showPrimaryPage() else closeOverlay()
             return START_NOT_STICKY
         }
         if (OverlayHost.current() == null && !Settings.canDrawOverlays(this)) {
@@ -130,9 +148,12 @@ class BrightnessOverlayService : Service() {
     }
 
     private fun showOverlay() {
-        val card = LayoutInflater.from(this).inflate(
+        // A Service Context does not inherit the application Activity theme. In particular,
+        // SwitchCompat otherwise lacks its switch style and may measure null on/off labels.
+        val panelContext = ContextThemeWrapper(this, applicationInfo.theme)
+        val card = LayoutInflater.from(panelContext).inflate(
             R.layout.dialog_main,
-            FrameLayout(this),
+            FrameLayout(panelContext),
             false
         )
         val horizontalMargin = dp(16)
@@ -219,8 +240,13 @@ class BrightnessOverlayService : Service() {
             }
         }
         overlayView = view
+        primaryCard = card
         bindViews(view)
         bindActions(view)
+        if (!observingHooks) {
+            observingHooks = true
+            HookBridge.observe(hookObserver)
+        } else renderHookState(HookBridge.state)
 
         var windowFlags = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S &&
@@ -245,8 +271,9 @@ class BrightnessOverlayService : Service() {
 
         view.setOnTouchListener { _, event ->
             if (event.action != MotionEvent.ACTION_DOWN) return@setOnTouchListener false
-            if (event.x < card.left || event.x >= card.right ||
-                event.y < card.top || event.y >= card.bottom) {
+            val visibleCard = settingsCard ?: card
+            if (event.x < visibleCard.left || event.x >= visibleCard.right ||
+                event.y < visibleCard.top || event.y >= visibleCard.bottom) {
                 view.performClick()
                 closeOverlay()
                 true
@@ -277,19 +304,15 @@ class BrightnessOverlayService : Service() {
         maxVal = view.findViewById(R.id.maxVal)
         rootStatus = view.findViewById(R.id.rootStatus)
         aodText = view.findViewById(R.id.aodText)
-        activeModeButton = view.findViewById(R.id.activeModeBtn)
-        activeModeText = view.findViewById(R.id.activeModeText)
         activeModeEnabled = null
-        activeModeButton.isEnabled = false
+        activeGuardUnhealthy = false
         brightnessSlider = view.findViewById(R.id.brightnessSlider)
     }
 
     private fun bindActions(view: View) {
         view.findViewById<FrameLayout>(R.id.aodToggleBtn).setOnClickListener { toggleAod() }
         view.findViewById<FrameLayout>(R.id.restoreBtn).setOnClickListener { restoreSystemControl() }
-        activeModeButton.setOnClickListener {
-            activeModeEnabled?.let { setActiveMode(!it) }
-        }
+        view.findViewById<FrameLayout>(R.id.policyEntryBtn).setOnClickListener { showHookSettings() }
         view.findViewById<TextView>(R.id.developerLink).setOnClickListener {
             openUrl("https://www.coolapk.com/u/3261403")
         }
@@ -320,19 +343,124 @@ class BrightnessOverlayService : Service() {
         }
     }
 
+    private fun showHookSettings() {
+        if (settingsCard != null || isClosing) return
+        val root = overlayView as? FrameLayout ?: return
+        val main = primaryCard ?: return
+        val context = ContextThemeWrapper(this, applicationInfo.theme)
+        val settings = LayoutInflater.from(context).inflate(R.layout.dialog_hooks, root, false)
+        val placement = FrameLayout.LayoutParams(main.layoutParams as FrameLayout.LayoutParams).apply {
+            height = min(dp(480), (root.height - dp(32)).coerceAtLeast(dp(160)))
+        }
+        settingsCard = settings
+        hookStatus = settings.findViewById(R.id.hookStatus)
+        activeModeSwitch = settings.findViewById(R.id.activeModeSwitch)
+        activeModeStatus = settings.findViewById(R.id.activeModeStatus)
+        activeModeSwitch?.setOnCheckedChangeListener { _, checked ->
+            if (!renderingActiveMode) setActiveMode(checked)
+        }
+        blockDarkSwitch = settings.findViewById(R.id.blockDarkSwitch)
+        blockCoverSwitch = settings.findViewById(R.id.blockCoverSwitch)
+        settings.findViewById<TextView>(R.id.hookSettingsBack).setOnClickListener { showPrimaryPage() }
+        settings.findViewById<TextView>(R.id.hookHelpEntry).setOnClickListener { showHookHelp() }
+        blockDarkSwitch?.setOnCheckedChangeListener { _, checked ->
+            if (!renderingHooks) changeHookPolicy(checked, HookBridge.state.cover)
+        }
+        blockCoverSwitch?.setOnCheckedChangeListener { _, checked ->
+            if (!renderingHooks) changeHookPolicy(HookBridge.state.dark, checked)
+        }
+        main.visibility = View.GONE
+        activeModeHint.visibility = View.GONE
+        root.addView(settings, placement)
+        mainHandler.removeCallbacks(refreshRunnable)
+        renderHookState(HookBridge.state)
+        renderActiveMode(activeModeEnabled)
+    }
+
+    private fun showPrimaryPage() {
+        val settings = settingsCard ?: return
+        (settings.parent as? ViewGroup)?.removeView(settings)
+        clearSettingsPage()
+        primaryCard?.visibility = View.VISIBLE
+        renderActiveMode(activeModeEnabled)
+        if (!destroyed && !isClosing) {
+            refreshFullUi()
+            mainHandler.removeCallbacks(refreshRunnable)
+            mainHandler.post(refreshRunnable)
+        }
+    }
+
+    private fun clearSettingsPage() {
+        settingsCard = null
+        hookStatus = null
+        activeModeSwitch = null
+        activeModeStatus = null
+        blockDarkSwitch = null
+        blockCoverSwitch = null
+    }
+
+    private fun renderHookState(state: HookBridge.State) {
+        renderingHooks = true
+        try {
+            blockDarkSwitch?.isChecked = state.dark
+            blockCoverSwitch?.isChecked = state.cover
+            blockDarkSwitch?.isEnabled = state.editable && !hookChangeInFlight && !restoreInFlight
+            blockCoverSwitch?.isEnabled = state.editable && !hookChangeInFlight && !restoreInFlight
+            hookStatus?.text = when {
+                hookChangeInFlight -> "正在保存配置…"
+                state.uncertain -> "配置保存未确认，请检查 LSP"
+                state.connection == HookBridge.Connection.CONNECTED -> "LSP 配置通道已连接"
+                state.connection == HookBridge.Connection.MISSING_SCOPE -> "请检查 LSP 作用域"
+                state.connection == HookBridge.Connection.UNSUPPORTED -> "需要支持 API 101 的 LSP"
+                else -> "LSP 尚未连接"
+            }
+        } finally {
+            renderingHooks = false
+        }
+    }
+
+    private fun changeHookPolicy(dark: Boolean, cover: Boolean) {
+        if (hookChangeInFlight || restoreInFlight) { renderHookState(HookBridge.state); return }
+        hookChangeInFlight = true
+        renderHookState(HookBridge.state)
+        executeIo {
+            val success = HookBridge.setPolicy(dark, cover)
+            mainHandler.post {
+                hookChangeInFlight = false
+                if (overlayView == null || destroyed) return@post
+                renderHookState(HookBridge.state)
+                showToast(if (success) {
+                    if (dark || cover) "已保存；若背屏已息屏，请先重新唤醒背屏" else "已关闭背屏 LSP 拦截"
+                } else "LSP 设置未确认保存，请检查模块、作用域并重新打开面板", Toast.LENGTH_LONG)
+            }
+        }
+    }
+
+    private fun showHookHelp() {
+        if (hookHelpDialog?.isShowing == true) return
+        hookHelpDialog = AlertDialog.Builder(activityHost ?: ContextThemeWrapper(this, applicationInfo.theme))
+            .setTitle("背屏 LSP 功能")
+            .setMessage(R.string.hook_setup)
+            .setPositiveButton("知道了", null)
+            .create().also { dialog ->
+                if (activityHost == null) dialog.window?.setType(WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY)
+                dialog.show()
+            }
+    }
+
     private fun setActiveMode(enabled: Boolean) {
         if (activeModeChangeInFlight || restoreInFlight) return
         activeModeChangeInFlight = true
         activeModeVersion++
-        activeModeButton.isEnabled = false
-        activeModeText.text = "永不息屏\n设置中"
+        renderActiveMode(activeModeEnabled)
         val panel = overlayView
         executeIo {
             val success = BrightnessManager.setActiveMode(applicationContext, enabled)
-              val actual = BrightnessManager.getActiveModeState()
+            val actual = BrightnessManager.getActiveModeState()
             mainHandler.post {
                 activeModeVersion++
                 activeModeChangeInFlight = false
+                activeGuardUnhealthy = actual == true && !success
                 if (actual != null) ControlStateStore.setActiveModeEnabled(this, actual)
                 if (overlayView !== panel) {
                     if (overlayView != null) refreshFullUi()
@@ -350,17 +478,24 @@ class BrightnessOverlayService : Service() {
 
     private fun restoreSystemControl() {
         if (restoreInFlight) return
+        if (hookChangeInFlight) {
+            showToast("请等待 LSP 设置保存完成")
+            return
+        }
         if (activeModeChangeInFlight) {
             showToast("请等待息屏时间设置完成")
             return
         }
         restoreInFlight = true
+        renderHookState(HookBridge.state)
         brightnessSlider.isEnabled = false
         stopSync()
         executeIo {
+            val hookSuccess = HookBridge.resetPolicy()
             val success = BrightnessManager.restoreSystemControl(applicationContext)
             mainHandler.post {
                 restoreInFlight = false
+                if (overlayView != null) renderHookState(HookBridge.state)
                 if (overlayView != null) brightnessSlider.isEnabled = true
                 if (success) {
                     ControlStateStore.setTakeoverActive(this, false)
@@ -368,10 +503,14 @@ class BrightnessOverlayService : Service() {
                     ControlStateStore.setTargetBrightness(this, -1)
                 }
                 if (overlayView != null) {
-                    if (success) {
+                    if (success && hookSuccess) {
                         lastTargetValue = -1
                         showToast("已恢复系统控制")
                         closeOverlay()
+                    } else if (success) {
+                        lastTargetValue = -1
+                        showToast("亮度与息屏时间已恢复；LSP 开关未确认关闭，请检查模块连接", Toast.LENGTH_LONG)
+                        refreshFullUi()
                     } else {
                         showToast("恢复失败，请检查 Root 授权")
                         refreshFullUi()
@@ -498,9 +637,11 @@ class BrightnessOverlayService : Service() {
                 aodText.text = when (aodEnabled) { true -> "AOD\n已开启"; false -> "AOD\n已关闭"; null -> "AOD\n读取失败" }
                 aodText.setTextColor(color(R.color.text_primary))
                 if (activeModeVersionAtStart == activeModeVersion && !activeModeChangeInFlight) {
+                    activeGuardUnhealthy = activeModeEnabled == true && !activeModeWatchdogReady
                     renderActiveMode(activeModeEnabled)
                     if (activeModeEnabled == true && !activeModeWatchdogReady) {
-                        activeModeText.text = "永不息屏\n守护异常"
+                        activeGuardUnhealthy = true
+                        renderActiveMode(activeModeEnabled)
                         ControlStateStore.setActiveModeEnabled(this, false)
                         showToast("背屏唤醒守护未启动，请检查 Root 与设备支持")
                     }
@@ -533,7 +674,8 @@ class BrightnessOverlayService : Service() {
                     ControlStateStore.setTakeoverActive(this, brightnessHealthy)
                     ControlStateStore.setActiveModeEnabled(this, activeHealthy)
                     if (lastTargetValue >= 10) setStatus(if (brightnessHealthy) "亮度已接管" else "亮度守护异常", color(if (brightnessHealthy) R.color.success else R.color.error))
-                    if (activeModeEnabled == true) activeModeText.text = if (activeHealthy) "永不息屏\n已开启" else "永不息屏\n守护异常"
+                    activeGuardUnhealthy = activeModeEnabled == true && !activeHealthy
+                    renderActiveMode(activeModeEnabled)
                 }
             }
         }
@@ -584,16 +726,24 @@ class BrightnessOverlayService : Service() {
 
     private fun renderActiveMode(enabled: Boolean?) {
         activeModeEnabled = enabled
-        if (enabled != null) ControlStateStore.setActiveModeEnabled(this, enabled)
-        activeModeButton.isEnabled = enabled != null && !activeModeChangeInFlight
-        activeModeText.text = when (enabled) {
-            true -> "永不息屏\n已开启"
-            false -> "永不息屏\n已关闭"
-            null -> "永不息屏\n状态未知"
+        // The switch reflects the setting; the tile reflects a working guardian, not
+        // merely an infinite timeout left behind after a guardian failure.
+        if (enabled != null) ControlStateStore.setActiveModeEnabled(this, enabled && !activeGuardUnhealthy)
+        renderingActiveMode = true
+        try {
+            activeModeSwitch?.isChecked = enabled == true
+            activeModeSwitch?.isEnabled = enabled != null && !activeModeChangeInFlight && !restoreInFlight
+            activeModeStatus?.text = when {
+                activeModeChangeInFlight -> "正在设置…"
+                enabled == null -> "状态未知，请检查 Root 授权"
+                enabled && activeGuardUnhealthy -> "守护异常，请检查 Root 与设备支持"
+                enabled -> "已开启 · 活跃显示"
+                else -> "已关闭 · 跟随系统超时"
+            }
+        } finally {
+            renderingActiveMode = false
         }
-        activeModeText.setTextColor(color(R.color.warning_text))
-        activeModeButton.contentDescription = activeModeText.text.toString().replace('\n', ' ')
-        activeModeHint.visibility = if (enabled == true) View.VISIBLE else View.GONE
+        activeModeHint.visibility = if (enabled == true && settingsCard == null) View.VISIBLE else View.GONE
         if (enabled == true && !hintBesideCard) {
             activeModeHint.post {
                 val card = overlayView?.findViewById<View>(R.id.dialogCard) ?: return@post
@@ -692,6 +842,10 @@ class BrightnessOverlayService : Service() {
     private fun color(resourceId: Int): Int = ContextCompat.getColor(this, resourceId)
 
     private fun removePanelView(view: View) {
+        clearSettingsPage()
+        primaryCard = null
+        hookHelpDialog?.dismiss()
+        hookHelpDialog = null
         if (activityHost != null) {
             (view.parent as? ViewGroup)?.removeView(view)
             activityHost = null
@@ -703,6 +857,8 @@ class BrightnessOverlayService : Service() {
 
     override fun onDestroy() {
         destroyed = true
+        if (observingHooks) HookBridge.removeObserver(hookObserver)
+        observingHooks = false
         mainHandler.removeCallbacksAndMessages(null)
         stopSync()
         cancelPanelAnimation()

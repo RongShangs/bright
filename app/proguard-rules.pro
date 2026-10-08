@@ -11,3 +11,4 @@
 # Since we use standard java.io, usually no extra rules are needed.
 -keep class brightnesslock.rongshangs.top.util.ShellUtils { *; }
 -keep class brightnesslock.rongshangs.top.util.BrightnessManager { *; }
+-keep class brightnesslock.rongshangs.top.hook.RearScreenModule { *; }

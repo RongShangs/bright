@@ -24,6 +24,8 @@
     <color name="warning_text">#FFAA3F2C</color>
     <color name="divider">#24555861</color>
     <color name="action_warning_surface">#14E25436</color>
+    <color name="action_policy_surface">#28FFB52E</color>
+    <color name="action_policy_stroke">#44CC8C13</color>
     <color name="action_warning_stroke">#28D94D36</color>
     <color name="action_success_surface">#1423885E</color>
     <color name="action_success_stroke">#2823885E</color>

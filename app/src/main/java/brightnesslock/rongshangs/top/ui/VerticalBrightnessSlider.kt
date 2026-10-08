@@ -110,6 +110,7 @@ class VerticalBrightnessSlider @JvmOverloads constructor(
     override fun onTouchEvent(event: MotionEvent): Boolean {
         when (event.action) {
             MotionEvent.ACTION_DOWN -> {
+                parent?.requestDisallowInterceptTouchEvent(true)
                 lastY = event.y
                 return true
             }
@@ -124,6 +125,7 @@ class VerticalBrightnessSlider @JvmOverloads constructor(
                 return true
             }
             MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                parent?.requestDisallowInterceptTouchEvent(false)
                 progress = progress.coerceAtLeast(minUserBrightness.toFloat() / maxBrightness)
                 invalidate()
                 val finalValue = userBrightness()

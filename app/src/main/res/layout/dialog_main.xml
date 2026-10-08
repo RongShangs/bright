@@ -82,7 +82,7 @@
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="10dp"
+                    android:layout_marginTop="6dp"
                     android:gravity="center_vertical"
                     android:orientation="horizontal">
 
@@ -107,7 +107,7 @@
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="10dp"
+                    android:layout_marginTop="6dp"
                     android:gravity="center_vertical"
                     android:orientation="horizontal">
 
@@ -144,30 +144,32 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:gravity="center_vertical"
-                android:orientation="horizontal">
+                android:orientation="vertical">
 
-                <TextView
-                    android:id="@+id/releasePage"
-                    android:layout_width="wrap_content"
-                    android:layout_height="32dp"
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="24dp"
                     android:gravity="center_vertical"
-                    android:text="发布页"
-                    android:textColor="@color/accent"
-                    android:textSize="11sp" />
+                    android:orientation="horizontal">
 
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginHorizontal="5dp"
-                    android:text="·"
-                    android:textColor="@color/divider" />
+                    <TextView
+                        android:id="@+id/releasePage"
+                        android:layout_width="wrap_content"
+                        android:layout_height="match_parent"
+                        android:gravity="center_vertical"
+                        android:text="发布页"
+                        android:textColor="@color/accent"
+                        android:textSize="11sp" />
+
+                </LinearLayout>
 
                 <TextView
                     android:id="@+id/developerLink"
                     android:layout_width="wrap_content"
-                    android:layout_height="32dp"
+                    android:layout_height="wrap_content"
+                    android:minHeight="24dp"
                     android:gravity="center_vertical"
-                    android:text="酷安"
+                    android:text="酷安@戎Shangs"
                     android:textColor="@color/text_secondary"
                     android:textSize="11sp" />
             </LinearLayout>
@@ -207,25 +209,25 @@
             </FrameLayout>
 
             <FrameLayout
-                android:id="@+id/activeModeBtn"
+                android:id="@+id/policyEntryBtn"
                 android:layout_width="match_parent"
                 android:layout_height="0dp"
                 android:layout_marginTop="6dp"
                 android:layout_weight="1"
-                android:background="@drawable/bg_action_warning"
+                android:background="@drawable/bg_action_policy"
                 android:clickable="true"
-                android:contentDescription="切换永不息屏"
+                android:contentDescription="@string/hook_settings_title"
                 android:focusable="true">
 
                 <TextView
-                    android:id="@+id/activeModeText"
+                    android:id="@+id/policyEntryText"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_gravity="center"
                     android:gravity="center"
-                    android:text="永不息屏\n读取中"
-                    android:textColor="@color/warning_text"
-                    android:textSize="11sp"
+                    android:text="背屏\n策略"
+                    android:textColor="@color/hint_warning"
+                    android:textSize="12sp"
                     android:textStyle="bold" />
             </FrameLayout>
 
