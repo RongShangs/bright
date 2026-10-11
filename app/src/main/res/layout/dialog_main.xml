@@ -175,7 +175,7 @@
             </LinearLayout>
         </LinearLayout>
 
-        <brightnesslock.rongshangs.top.ui.VerticalBrightnessSlider
+        <top.rongshangs.brightnesslock.ui.VerticalBrightnessSlider
             android:id="@+id/brightnessSlider"
             android:layout_width="72dp"
             android:layout_height="match_parent"

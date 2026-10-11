@@ -13,16 +13,16 @@ val localProperties = Properties().apply {
 val releaseStorePath = localProperties.getProperty("bright.signing.storeFile")
 
 android {
-    namespace = "brightnesslock.rongshangs.top"
+    namespace = "top.rongshangs.brightnesslock"
     compileSdk = 36
     ndkVersion = "28.2.13676358"
 
     defaultConfig {
-        applicationId = "brightnesslock.rongshangs.top"
+        applicationId = "top.rongshangs.brightnesslock"
         minSdk = 26
         targetSdk = 35
-        versionCode = 24
-        versionName = "2.0.0"
+        versionCode = 25
+        versionName = "2.1.0"
     }
 
     signingConfigs {

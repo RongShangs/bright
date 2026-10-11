@@ -9,6 +9,6 @@
 
 # Add any custom rules here that might be needed for root shell execution libraries if any
 # Since we use standard java.io, usually no extra rules are needed.
--keep class brightnesslock.rongshangs.top.util.ShellUtils { *; }
--keep class brightnesslock.rongshangs.top.util.BrightnessManager { *; }
--keep class brightnesslock.rongshangs.top.hook.RearScreenModule { *; }
+-keep class top.rongshangs.brightnesslock.util.ShellUtils { *; }
+-keep class top.rongshangs.brightnesslock.util.BrightnessManager { *; }
+-keep class top.rongshangs.brightnesslock.hook.RearScreenModule { *; }
